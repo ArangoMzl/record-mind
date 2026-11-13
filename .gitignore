@@ -1,0 +1,13 @@
+target/
+*.db
+*.db-shm
+*.db-wal
+node_modules/
+app/dist/
+app/src-tauri/gen/
+
+# Instalador copiado para la web (se publica aparte, no va en git)
+site/downloads/*.exe
+
+# Caché de Vite de la vista previa del sitio
+site/.vite/
