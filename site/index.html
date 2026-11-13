@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>record-mind — Anota el detalle, Claude lo resuelve</title>
+<meta name="description" content="Tablero de micro-pendientes para Claude Code. Capturas lo que hay que corregir con una nota y una captura; Claude lo resuelve con la memoria de Engram y te lo deja para revisar.">
+<meta name="theme-color" content="#09090b">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #09090b;
+    --surface: #111113;
+    --elevated: #18181c;
+    --hover: #1f1f24;
+    --line: rgb(255 255 255 / 0.07);
+    --line-strong: rgb(255 255 255 / 0.12);
+    --ink: #fafafa;
+    --ink-2: #a1a1aa;
+    --ink-3: #63636e;
+    --accent: #ea1889;
+    --accent-2: #ff3fa4;
+    --accent-soft: rgb(234 24 137 / 0.14);
+    --accent-glow: rgb(234 24 137 / 0.32);
+    --amber: #fbbf24;
+    --green: #34d399;
+    --violet: #c4b5fd;
+    --red: #f87171;
+    --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+    --radius: 16px;
+    --max: 1160px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background:
+      radial-gradient(900px 520px at 100% 0%, rgb(234 24 137 / 0.13), transparent 70%),
+      radial-gradient(700px 480px at 0% 60%, rgb(234 24 137 / 0.05), transparent 70%),
+      linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px) 0 0 / 100% 56px,
+      linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px) 0 0 / 56px 100%;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 70%, rgb(0 0 0 / 0.5) 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 70%, rgb(0 0 0 / 0.5) 100%);
+  }
+  a { color: inherit; text-decoration: none; }
+  code, kbd, .mono { font-family: var(--mono); }
+  img, svg { display: block; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    border-bottom: 1px solid transparent;
+    transition: background .25s, border-color .25s, backdrop-filter .25s;
+  }
+  .nav.scrolled {
+    background: rgb(9 9 11 / 0.72);
+    border-color: var(--line);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+            backdrop-filter: blur(14px) saturate(140%);
+  }
+  .nav .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand img { width: 30px; height: 30px; }
+  .nav-links { display: flex; gap: 26px; margin-left: auto; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+  .nav-links a { transition: color .15s; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav .btn { padding: 9px 16px; font-size: 14px; }
+  @media (max-width: 860px) { .nav-links { display: none; } .nav .btn { margin-left: auto; } }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px 22px; border-radius: 12px;
+    font: 600 15px/1 var(--sans);
+    border: 1px solid var(--line-strong);
+    background: rgb(255 255 255 / 0.03);
+    color: var(--ink);
+    cursor: pointer;
+    transition: transform .15s, background .15s, border-color .15s, box-shadow .2s;
+  }
+  .btn:hover { background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.2); }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--accent); border-color: transparent; color: #fff;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08) inset, 0 8px 30px -8px var(--accent-glow);
+  }
+  .btn-primary:hover { background: #f02a95; border-color: transparent; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12) inset, 0 10px 40px -6px rgb(234 24 137 / 0.55); }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* ---------- Shared ---------- */
+  section { position: relative; }
+  .section { padding: 120px 0; }
+  @media (max-width: 700px) { .section { padding: 84px 0; } }
+  .eyebrow {
+    display: inline-block;
+    font: 500 12px/1 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+  }
+  h1, h2, h3 { margin: 0; letter-spacing: -0.035em; line-height: 1.05; }
+  h2 { font-size: clamp(34px, 5vw, 56px); font-weight: 750; }
+  h2 .soft { color: var(--ink-3); }
+  .lead { color: var(--ink-2); font-size: 18px; max-width: 620px; margin: 22px 0 0; }
+  .center { text-align: center; }
+  .center .lead { margin-left: auto; margin-right: auto; }
+  .pink { color: var(--accent); }
+  .grad {
+    background: linear-gradient(180deg, var(--accent-2), var(--accent) 70%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 26px; height: 26px; padding: 0 7px;
+    font-size: 12px; font-weight: 500; color: var(--ink);
+    border: 1px solid var(--line-strong); border-bottom-width: 2px;
+    border-radius: 7px; background: var(--elevated);
+  }
+
+  .reveal { opacity: 1; }
+  .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  .js .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 84px 0 40px; text-align: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 7px 14px; border-radius: 999px;
+    border: 1px solid rgb(234 24 137 / 0.35);
+    background: rgb(234 24 137 / 0.08);
+    font: 500 12px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+    color: #ff7ac0;
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgb(234 24 137 / .6); } 50% { box-shadow: 0 0 0 6px rgb(234 24 137 / 0); } }
+  .hero h1 {
+    margin-top: 28px;
+    font-size: clamp(44px, 8.4vw, 96px);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 0.98;
+  }
+  .hero .lead { font-size: clamp(16px, 2vw, 19px); margin: 26px auto 0; max-width: 640px; }
+  .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 36px; }
+  .hero-shortcut {
+    display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+    margin-top: 26px; padding: 10px 16px;
+    border: 1px solid var(--line); border-radius: 12px; background: rgb(17 17 19 / .7);
+    font-size: 13.5px; color: var(--ink-2);
+  }
+  .hero-shortcut .keys { display: inline-flex; gap: 5px; align-items: center; color: var(--ink-3); }
+
+  /* ---------- Board mock ---------- */
+  .board-shell {
+    position: relative;
+    margin: 72px auto 0;
+    max-width: 1080px;
+    border-radius: 20px;
+    border: 1px solid var(--line-strong);
+    background: linear-gradient(180deg, rgb(24 24 28 / .9), rgb(13 13 15 / .95));
+    box-shadow: 0 40px 120px -40px rgb(234 24 137 / .35), 0 30px 80px -30px rgb(0 0 0 / .8);
+    overflow: hidden;
+    text-align: left;
+  }
+  .board-shell::before {
+    content: ""; position: absolute; inset: -1px; border-radius: 20px; pointer-events: none;
+    background: linear-gradient(180deg, rgb(234 24 137 / .5), transparent 35%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; padding: 1px;
+  }
+  .titlebar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-3);
+  }
+  .titlebar .lights { display: flex; gap: 6px; }
+  .titlebar .lights i { width: 10px; height: 10px; border-radius: 50%; background: rgb(255 255 255 / .1); }
+  .titlebar .proj { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .titlebar .live { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-family: var(--mono); font-size: 11px; }
+  .titlebar .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 16px; height: 480px; }
+  @media (max-width: 860px) {
+    .board {
+      grid-template-columns: repeat(4, 232px); overflow-x: auto; scroll-snap-type: x mandatory;
+      scrollbar-width: none; overscroll-behavior-x: contain;
+    }
+    .board::-webkit-scrollbar { display: none; }
+    .board .col { scroll-snap-align: start; }
+  }
+  @media (max-width: 460px) { .board { gap: 8px; padding: 10px; grid-template-columns: repeat(4, 210px); height: 470px; } }
+
+  .col { border: 1px solid var(--line); background: rgb(17 17 19 / .55); border-radius: 14px; display: flex; flex-direction: column; min-width: 0; }
+  .col header { display: flex; align-items: center; gap: 9px; padding: 12px 13px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .col header .sd { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .col header .n { margin-left: 2px; padding: 0 6px; border-radius: 6px; background: rgb(255 255 255 / .05); font: 500 11px/18px var(--mono); color: var(--ink-2); }
+  .col[data-s="inbox"] .sd { background: var(--ink-2); box-shadow: 0 0 10px var(--ink-2); }
+  .col[data-s="progress"] .sd { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+  .col[data-s="review"] .sd { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .col[data-s="done"] .sd { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .col .stack { display: flex; flex-direction: column; gap: 9px; padding: 0 9px 10px; }
+
+  .card {
+    position: relative; border-radius: 11px; border: 1px solid var(--line);
+    background: var(--elevated); overflow: hidden; font-size: 12px;
+    transition: border-color .3s, opacity .4s;
+  }
+  .card .shot { aspect-ratio: 16 / 7; border-bottom: 1px solid var(--line); background: #0d0d10; position: relative; overflow: hidden; }
+  .card .shot::before {
+    content: ""; position: absolute; inset: 14% 10% auto 10%; height: 14%;
+    border-radius: 3px; background: rgb(255 255 255 / .09);
+    box-shadow: 0 calc(var(--h, 30px) * 1) 0 -2px rgb(255 255 255 / .05);
+  }
+  .card .shot::after {
+    content: ""; position: absolute; left: 10%; bottom: 16%; width: 38%; height: 26%;
+    border-radius: 4px; border: 2px solid var(--accent);
+    box-shadow: 0 0 14px rgb(234 24 137 / .5);
+  }
+  .card .shot.alt::after { left: auto; right: 12%; width: 26%; bottom: 22%; height: 30%; border-color: var(--amber); box-shadow: 0 0 14px rgb(251 191 36 / .4); }
+  .card .body { padding: 9px 10px 10px; }
+  .card .meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-3); margin-bottom: 4px; }
+  .card .meta .id { font-family: var(--mono); }
+  .card .meta .ago { margin-left: auto; }
+  .card .meta .flame { color: var(--amber); display: inline-flex; }
+  .card .meta .flame svg { width: 11px; height: 11px; }
+  .card h4 { margin: 0; font-size: 12.5px; font-weight: 500; line-height: 1.35; letter-spacing: -0.005em; }
+  .card .state { display: none; margin-top: 8px; }
+  .card .working-line { align-items: center; gap: 6px; color: var(--accent); font-weight: 500; font-size: 11px; }
+  .card .working-line svg { width: 12px; height: 12px; animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .card .resolution { border-radius: 8px; background: rgb(255 255 255 / .03); padding: 6px 8px; color: var(--ink-2); font-size: 11px; line-height: 1.45; }
+  .card .foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 10.5px; color: var(--ink-3); }
+  .card .foot .mem { display: inline-flex; align-items: center; gap: 4px; color: var(--violet); }
+  .card .foot svg { width: 11px; height: 11px; }
+  .card .foot .ok { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--green); font-weight: 500; }
+  .card[data-st="progress"] { border-color: transparent; }
+  .card[data-st="progress"]::before {
+    content: ""; position: absolute; inset: 0; border-radius: 11px; padding: 1px; pointer-events: none;
+    background: linear-gradient(90deg, var(--accent), transparent 40%, transparent 60%, var(--accent)) 0 0 / 200% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: shimmer 2.2s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: 200% 0; } }
+  .card[data-st="progress"] .working-line { display: flex; }
+  .card[data-st="review"] .state.review { display: block; }
+  .card[data-st="review"] .foot, .card[data-st="done"] .foot { display: flex; }
+  .card .foot { display: none; }
+  .card[data-st="done"] { opacity: .62; }
+  .card[data-st="done"] h4 { color: var(--ink-2); }
+  .card.mover { box-shadow: 0 0 0 1px rgb(234 24 137 / .25); }
+  .card.flying { z-index: 5; box-shadow: 0 20px 50px -10px rgb(0 0 0 / .7), 0 0 0 1px rgb(234 24 137 / .5); }
+
+  .toast {
+    position: absolute; right: 16px; bottom: 16px; z-index: 6;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 12px;
+    background: rgb(24 24 28 / .95); border: 1px solid var(--line-strong);
+    box-shadow: 0 16px 40px -12px rgb(0 0 0 / .8);
+    font-size: 12.5px; color: var(--ink-2);
+    opacity: 0; transform: translateY(8px); transition: opacity .3s, transform .3s;
+    max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast b { color: var(--ink); font-weight: 600; }
+  .toast .ic { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+  .toast .ic svg { width: 13px; height: 13px; }
+
+  .flow-strip {
+    display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+    margin-top: 28px; font: 500 13px/1 var(--mono); color: var(--ink-3);
+  }
+  .flow-strip span { display: inline-flex; align-items: center; gap: 8px; }
+  .flow-strip i { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ---------- Problem ---------- */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 56px; }
+  @media (max-width: 820px) { .compare { grid-template-columns: 1fr; } }
+  .panel {
+    border-radius: var(--radius); border: 1px solid var(--line);
+    background: rgb(17 17 19 / .75); overflow: hidden;
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+  .panel-head .tag { width: 8px; height: 8px; border-radius: 50%; }
+  .panel.bad .tag { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .panel.good { border-color: rgb(234 24 137 / .3); box-shadow: 0 20px 60px -30px rgb(234 24 137 / .4); }
+  .panel.good .tag { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .chat { padding: 20px 18px 22px; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; line-height: 1.5; }
+  .msg.you { align-self: flex-end; background: rgb(255 255 255 / .06); border: 1px solid var(--line); }
+  .msg.ai { align-self: flex-start; background: rgb(255 255 255 / .02); border: 1px solid var(--line); color: var(--ink-2); }
+  .panel.good .msg.ai { border-color: rgb(234 24 137 / .22); color: var(--ink); }
+  .sys { font: 400 12.5px/1.5 var(--mono); color: var(--ink-3); }
+  .sys b { color: var(--accent); font-weight: 500; }
+  .sys.ok b { color: var(--green); }
+  .note-scrap {
+    font: 400 12.5px/1.6 var(--mono); color: var(--ink-3);
+    border: 1px dashed var(--line-strong); border-radius: 10px; padding: 10px 12px;
+    text-decoration: line-through; text-decoration-color: rgb(248 113 113 / .5);
+  }
+  .sigh { font-style: italic; color: var(--ink-3); font-size: 13px; }
+  .problem-foot { margin-top: 36px; text-align: center; color: var(--ink-2); font-size: 17px; }
+  .problem-foot strong { color: var(--ink); }
+
+  /* ---------- Features (bento) ---------- */
+  .bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; margin-top: 56px; }
+  .tile {
+    position: relative; grid-column: span 2;
+    border-radius: var(--radius); border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgb(24 24 28 / .7), rgb(17 17 19 / .7));
+    padding: 26px; overflow: hidden;
+    transition: border-color .2s, transform .2s;
+  }
+  .tile:hover { border-color: var(--line-strong); }
+  .tile.w3 { grid-column: span 3; }
+  .tile.w4 { grid-column: span 4; }
+  @media (max-width: 980px) { .tile, .tile.w3, .tile.w4 { grid-column: span 3; } }
+  @media (max-width: 680px) { .bento { grid-template-columns: 1fr; } .tile, .tile.w3, .tile.w4 { grid-column: auto; } }
+  .tile .ico {
+    width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid rgb(234 24 137 / .25);
+    margin-bottom: 18px;
+  }
+  .tile .ico svg { width: 19px; height: 19px; }
+  .tile h3 { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.25; }
+  .tile p { margin: 10px 0 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.6; }
+  .tile p code { font-size: 13px; color: var(--ink); background: rgb(255 255 255 / .05); padding: 1px 5px; border-radius: 5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; }
+  .chip { font: 500 12px/1 var(--mono); padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: rgb(255 255 255 / .03); color: var(--ink-2); }
+  .chip.on { border-color: rgb(234 24 137 / .35); color: #ff8ac8; background: rgb(234 24 137 / .07); }
+
+  .capture-mock {
+    margin-top: 22px; border-radius: 14px; border: 1px solid var(--line-strong);
+    background: #0e0e11; box-shadow: 0 20px 50px -20px rgb(0 0 0 / .8), 0 0 0 4px rgb(234 24 137 / .06);
+    padding: 14px; display: grid; grid-template-columns: 1fr 112px; gap: 12px; align-items: stretch;
+  }
+  @media (max-width: 460px) { .capture-mock { grid-template-columns: 1fr; } }
+  .capture-mock .field { font-size: 14px; color: var(--ink); min-height: 64px; }
+  .capture-mock .field .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--accent); vertical-align: -3px; margin-left: 1px; animation: caret 1s steps(1) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+  .capture-mock .thumb { border-radius: 9px; border: 1px solid var(--line); background: #141418; position: relative; overflow: hidden; min-height: 72px; }
+  .capture-mock .thumb::before { content: ""; position: absolute; inset: 16% 14% auto; height: 12%; border-radius: 3px; background: rgb(255 255 255 / .09); }
+  .capture-mock .thumb::after { content: ""; position: absolute; left: 14%; bottom: 18%; width: 46%; height: 30%; border-radius: 4px; border: 2px solid var(--accent); }
+  .capture-mock .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
+  .capture-mock .bar .proj { padding: 3px 8px; border-radius: 6px; background: rgb(255 255 255 / .05); color: var(--ink-2); font-family: var(--mono); font-size: 11.5px; }
+  .capture-mock .bar .go { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+
+  .term {
+    margin-top: 18px; border-radius: 12px; border: 1px solid var(--line);
+    background: #0b0b0d; padding: 14px 16px; overflow-x: auto;
+    font: 400 12.5px/1.75 var(--mono); color: var(--ink-2); white-space: pre;
+  }
+  .term .p { color: var(--accent); user-select: none; }
+  .term .c { color: var(--ink-3); }
+  .term .g { color: var(--green); }
+  .term .y { color: var(--amber); }
+
+  .mini-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 20px; }
+  .mini-cols div { border-radius: 8px; border: 1px solid var(--line); padding: 8px; font-size: 11px; color: var(--ink-2); display: flex; flex-direction: column; gap: 5px; }
+  .mini-cols div b { display: flex; align-items: center; gap: 5px; font-weight: 600; color: var(--ink); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini-cols div b i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .mini-cols span { height: 14px; border-radius: 4px; background: rgb(255 255 255 / .05); }
+
+  .detail-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 8px; }
+  .detail-list li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--ink-2); }
+  .detail-list li svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; margin-top: 3px; }
+  .actions-row { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .actions-row span { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 9px; font-size: 12.5px; font-weight: 500; }
+  .actions-row .ap { color: var(--green); border: 1px solid rgb(52 211 153 / .3); background: rgb(52 211 153 / .08); }
+  .actions-row .dv { color: var(--amber); border: 1px solid rgb(251 191 36 / .3); background: rgb(251 191 36 / .08); }
+  .actions-row svg { width: 13px; height: 13px; }
+
+  /* ---------- Steps ---------- */
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 64px; position: relative; }
+  @media (max-width: 980px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px) { .steps { grid-template-columns: 1fr; } }
+  .step {
+    position: relative; border-radius: var(--radius); border: 1px solid var(--line);
+    background: rgb(17 17 19 / .75); padding: 24px 22px; display: flex; flex-direction: column;
+  }
+  .step .num { font: 600 13px/1 var(--mono); color: var(--accent); letter-spacing: .06em; }
+  .step .st { display: inline-flex; align-items: center; gap: 7px; margin-top: 18px; font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+  .step .st i { width: 7px; height: 7px; border-radius: 50%; }
+  .step h3 { font-size: 21px; font-weight: 650; letter-spacing: -0.02em; margin-top: 10px; line-height: 1.25; }
+  .step p { color: var(--ink-2); font-size: 14.5px; margin: 10px 0 18px; flex: 1; }
+  .step .term { margin-top: 0; font-size: 12px; padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .term { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .12) transparent; }
+
+  /* ---------- Engram ---------- */
+  .engram-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 56px; align-items: center; margin-top: 8px; }
+  @media (max-width: 960px) { .engram-grid { grid-template-columns: 1fr; gap: 40px; } }
+  .points { list-style: none; padding: 0; margin: 30px 0 0; display: grid; gap: 18px; }
+  .points li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+  .points .pi { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; border: 1px solid var(--line-strong); background: rgb(255 255 255 / .03); color: var(--ink); }
+  .points .pi svg { width: 16px; height: 16px; }
+  .points h4 { margin: 4px 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .points p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+  .points code { font-size: 12.5px; color: var(--ink); background: rgb(255 255 255 / .05); padding: 1px 5px; border-radius: 5px; }
+
+  .diagram {
+    border-radius: 20px; border: 1px solid var(--line-strong);
+    background: radial-gradient(500px 300px at 50% 40%, rgb(234 24 137 / .09), transparent 70%), rgb(13 13 15 / .9);
+    padding: 28px; position: relative;
+  }
+  .diagram .lbl { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .dg { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; gap: 0 18px; margin-top: 20px; }
+  .node { border-radius: 14px; border: 1px solid var(--line-strong); background: var(--elevated); padding: 14px 16px; }
+  .node .t { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; }
+  .node .t img, .node .t .em { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
+  .node .t .em { display: grid; place-items: center; background: rgb(196 181 253 / .15); color: var(--violet); }
+  .node .t .em svg { width: 13px; height: 13px; }
+  .node .d { margin-top: 6px; font: 400 12px/1.5 var(--mono); color: var(--ink-3); }
+  .node.claude { grid-column: 1 / -1; text-align: center; border-color: rgb(234 24 137 / .4); box-shadow: 0 0 40px -10px rgb(234 24 137 / .4); }
+  .node.claude .t { justify-content: center; }
+  .node.claude .t .em { background: var(--accent-soft); color: var(--accent); }
+  .link { display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 6px; }
+  .link .ln { width: 2px; height: 34px; background: linear-gradient(var(--accent), rgb(234 24 137 / .2)); position: relative; overflow: hidden; border-radius: 2px; }
+  .link .ln::after { content: ""; position: absolute; left: 0; top: -12px; width: 2px; height: 12px; background: #fff; box-shadow: 0 0 8px var(--accent); animation: travel 2.2s linear infinite; }
+  .link.l2 .ln::after { animation-delay: 1.1s; }
+  .link.up .ln { background: linear-gradient(rgb(196 181 253 / .25), var(--violet)); }
+  .link.up .ln::after { animation-name: travelup; box-shadow: 0 0 8px var(--violet); }
+  @keyframes travel { to { top: 100%; } }
+  @keyframes travelup { from { top: 100%; } to { top: -12px; } }
+  .link .lt { font: 500 11.5px/1.3 var(--mono); color: var(--ink-2); text-align: center; }
+  .ro {
+    grid-column: 1 / -1; margin-top: 18px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 12px; border: 1px dashed rgb(196 181 253 / .35);
+    font-size: 13px; color: var(--ink-2);
+  }
+  .ro svg { width: 16px; height: 16px; color: var(--violet); flex-shrink: 0; }
+  .ro b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Tools table ---------- */
+  .tools { margin-top: 56px; border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; background: rgb(17 17 19 / .75); }
+  .tool-row { display: grid; grid-template-columns: 220px 1fr 160px; gap: 20px; align-items: center; padding: 18px 24px; border-top: 1px solid var(--line); transition: background .15s; }
+  .tool-row:first-child { border-top: 0; }
+  .tool-row:hover { background: rgb(255 255 255 / .02); }
+  .tool-row.head { font: 500 11.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); padding-top: 16px; padding-bottom: 16px; background: rgb(255 255 255 / .015); }
+  .tool-row.head:hover { background: rgb(255 255 255 / .015); }
+  .tool-row code { font-size: 14px; color: #ff8ac8; }
+  .tool-row p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+  .tool-row .mv { font: 500 12px/1.3 var(--mono); color: var(--ink-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tool-row .mv i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  @media (max-width: 760px) {
+    .tool-row { grid-template-columns: 1fr; gap: 6px; padding: 16px 18px; }
+    .tool-row.head { display: none; }
+  }
+
+  /* ---------- Roadmap ---------- */
+  .road { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 56px; }
+  @media (max-width: 980px) { .road { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .road { grid-template-columns: 1fr; } }
+  .phase { border-radius: var(--radius); border: 1px solid var(--line); background: rgb(17 17 19 / .75); padding: 22px; position: relative; }
+  .phase .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .phase .ph { font: 600 13px/1 var(--mono); color: var(--ink-3); letter-spacing: .06em; }
+  .badge { font: 500 11px/1 var(--mono); padding: 5px 8px; border-radius: 6px; letter-spacing: .04em; }
+  .badge.done { color: var(--green); background: rgb(52 211 153 / .1); border: 1px solid rgb(52 211 153 / .25); }
+  .badge.next { color: var(--amber); background: rgb(251 191 36 / .1); border: 1px solid rgb(251 191 36 / .25); }
+  .badge.later { color: var(--ink-3); background: rgb(255 255 255 / .04); border: 1px solid var(--line-strong); }
+  .phase h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.015em; margin-top: 16px; line-height: 1.3; }
+  .phase ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+  .phase li { color: var(--ink-2); font-size: 14px; padding-left: 16px; position: relative; line-height: 1.45; }
+  .phase li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 2px; background: var(--line-strong); }
+  .phase.is-done { border-color: rgb(52 211 153 / .18); }
+  .phase.is-done li::before { background: var(--green); }
+  .phase.is-next { border-color: rgb(251 191 36 / .22); }
+  .phase.is-next li::before { background: var(--amber); }
+
+  /* ---------- Install / CTA ---------- */
+  .cta {
+    border-radius: 28px; border: 1px solid rgb(234 24 137 / .3);
+    background:
+      radial-gradient(700px 360px at 50% 0%, rgb(234 24 137 / .2), transparent 70%),
+      linear-gradient(180deg, rgb(24 24 28 / .9), rgb(11 11 13 / .95));
+    padding: 72px 48px; text-align: center; position: relative; overflow: hidden;
+  }
+  @media (max-width: 640px) { .cta { padding: 52px 20px; border-radius: 22px; } }
+  .cta h2 { font-size: clamp(38px, 6vw, 68px); }
+  .cta .lead { margin-left: auto; margin-right: auto; }
+  .install { display: grid; gap: 12px; max-width: 760px; margin: 44px auto 0; text-align: left; }
+  .cmd {
+    display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px;
+    border-radius: 14px; border: 1px solid var(--line-strong); background: #0b0b0d;
+    padding: 12px 12px 12px 14px;
+  }
+  .cmd .k { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font: 600 12px/1 var(--mono); color: var(--accent); background: var(--accent-soft); }
+  .cmd .tx { min-width: 0; }
+  .cmd .tx small { display: block; font-size: 12.5px; color: var(--ink-3); margin-bottom: 3px; }
+  .cmd .tx code { display: block; font-size: 13px; color: var(--ink); white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .cmd .tx code::-webkit-scrollbar { display: none; }
+  .cmd .tx code .p { color: var(--accent); user-select: none; }
+  .copy {
+    border: 1px solid var(--line-strong); background: rgb(255 255 255 / .03); color: var(--ink-2);
+    width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .copy:hover { color: var(--ink); border-color: rgb(255 255 255 / .2); }
+  .copy.done { color: var(--green); border-color: rgb(52 211 153 / .4); }
+  .copy svg { width: 15px; height: 15px; }
+  .req { margin-top: 22px; font-size: 13.5px; color: var(--ink-3); }
+  .req strong { color: var(--ink-2); font-weight: 500; }
+  a.copy { color: var(--ink-2); }
+
+  .dl { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 36px; }
+  .btn-lg { padding: 16px 28px; font-size: 16px; border-radius: 14px; }
+  .btn-lg svg { width: 18px; height: 18px; }
+  .dl-meta { font: 400 12.5px/1.4 var(--mono); color: var(--ink-3); }
+  .install { margin-top: 40px; }
+  .cmd .tx .plain { display: block; font-size: 14px; color: var(--ink); line-height: 1.45; }
+  .cmd code.inl, .cmd .plain code.inl {
+    display: inline; font-size: 12.5px; color: var(--ink); white-space: nowrap;
+    background: rgb(255 255 255 / .06); padding: 1px 5px; border-radius: 5px;
+  }
+  @media (max-width: 600px) {
+    .cmd .tx code, .cmd .plain code.inl { white-space: normal; overflow-wrap: anywhere; }
+  }
+  .cmd small kbd { height: 20px; min-width: 20px; font-size: 10.5px; padding: 0 5px; border-radius: 5px; vertical-align: 1px; }
+
+  .src { max-width: 760px; margin: 28px auto 0; text-align: left; border-top: 1px solid var(--line); padding-top: 20px; }
+  .src summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 14px; font-weight: 500; color: var(--ink-2); transition: color .15s;
+  }
+  .src summary::-webkit-details-marker { display: none; }
+  .src summary::after { content: "+"; font: 500 16px/1 var(--mono); color: var(--accent); }
+  .src[open] summary::after { content: "−"; }
+  .src summary:hover { color: var(--ink); }
+  .src-body p { margin: 16px 0 0; font-size: 14px; color: var(--ink-3); text-align: center; }
+
+  /* ---------- Footer ---------- */
+  footer { border-top: 1px solid var(--line); margin-top: 120px; padding: 40px 0 48px; color: var(--ink-3); font-size: 14px; }
+  footer .wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  footer .brand { color: var(--ink); }
+  footer nav { margin-left: auto; display: flex; gap: 22px; flex-wrap: wrap; }
+  footer a:hover { color: var(--ink); }
+  footer .stack { width: 100%; font-size: 13px; }
+  footer .stack a { color: var(--ink-2); border-bottom: 1px solid var(--line-strong); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+    .js .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<script>document.documentElement.classList.add("js");</script>
+
+<!-- Íconos reutilizables -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.2 1-3.6 2-4.6.3 1.6 1.2 2.6 2.3 2.6C11 8 12 5 12 2z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="8" width="10" height="8" rx="1.5"/></symbol>
+    <symbol id="i-board" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a6 6 0 0 1-12 0V8z"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+    <symbol id="i-tray" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2.5"/><path d="M8 22h8M12 18v4"/><circle cx="17" cy="9" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a href="#" class="brand" aria-label="record-mind, inicio"><img src="icon.svg" alt="">record-mind</a>
+    <nav class="nav-links" aria-label="Secciones">
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#funciones">Funciones</a>
+      <a href="#engram">Engram</a>
+      <a href="#mcp">MCP</a>
+      <a href="#hoja-de-ruta">Hoja de ruta</a>
+    </nav>
+    <a href="#instalar" class="btn btn-primary">Instalar <svg><use href="#i-save"/></svg></a>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="wrap">
+      <span class="pill reveal"><span class="dot"></span>Micro-pendientes para Claude Code</span>
+      <h1 class="reveal">Anota el detalle.<br><span class="grad">Claude lo resuelve.</span></h1>
+      <p class="lead reveal">El texto que se ve chico, la imagen que no carga, el botón que falta. Lo capturas con una nota y una captura sin salir de lo que haces; Claude lo toma del tablero, lo resuelve con la memoria de Engram y te lo deja para revisar.</p>
+      <div class="hero-ctas reveal">
+        <a href="#instalar" class="btn btn-primary">Empezar ahora <svg><use href="#i-arrow"/></svg></a>
+        <a href="#como-funciona" class="btn">Ver cómo funciona</a>
+      </div>
+      <div class="hero-shortcut reveal">
+        Captura desde cualquier app
+        <span class="keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Espacio</kbd></span>
+      </div>
+
+      <!-- Tablero animado -->
+      <div class="board-shell reveal" aria-label="Vista previa del tablero de record-mind">
+        <div class="titlebar">
+          <span class="lights"><i></i><i></i><i></i></span>
+          <span>record-mind — tablero</span>
+          <span class="proj"><span class="live">en vivo</span></span>
+        </div>
+        <div class="board" id="board">
+          <div class="col" data-s="inbox">
+            <header><span class="sd"></span>Capturado <span class="n">2</span></header>
+            <div class="stack">
+              <article class="card mover" id="mover" data-st="inbox">
+                <div class="shot"></div>
+                <div class="body">
+                  <div class="meta"><span class="id">#16</span><span class="flame"><svg><use href="#i-flame"/></svg></span><span class="ago">ahora</span></div>
+                  <h4>El menú se ve con letra más pequeña en móvil</h4>
+                  <div class="state working-line"><svg><use href="#i-spark"/></svg> Claude está en esto…</div>
+                  <div class="state review"><div class="resolution">Unifiqué el tamaño con <code>clamp()</code> como el resto del sitio. Toqué <code>Navbar.css</code>.</div></div>
+                  <div class="foot"><span class="mem"><svg><use href="#i-brain"/></svg> 3</span><span class="ok"><svg><use href="#i-check"/></svg> <span class="ok-t">Aprobar</span></span></div>
+                </div>
+              </article>
+              <article class="card" data-st="inbox">
+                <div class="body">
+                  <div class="meta"><span class="id">#15</span><span class="ago">4 min</span></div>
+                  <h4>Subir 2px el título del hero</h4>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="col" data-s="progress">
+            <header><span class="sd"></span>Claude trabajando <span class="n">1</span></header>
+            <div class="stack">
+              <article class="card" data-st="progress">
+                <div class="shot alt"></div>
+                <div class="body">
+                  <div class="meta"><span class="id">#14</span><span class="ago">2 min</span></div>
+                  <h4>No carga el logo del encabezado</h4>
+                  <div class="state working-line"><svg><use href="#i-spark"/></svg> Claude está en esto…</div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="col" data-s="review">
+            <header><span class="sd"></span>Para revisar <span class="n">1</span></header>
+            <div class="stack">
+              <article class="card" data-st="review">
+                <div class="body">
+                  <div class="meta"><span class="id">#12</span><span class="ago">12 min</span></div>
+                  <h4>Botón «Enviar» sin estado deshabilitado</h4>
+                  <div class="state review"><div class="resolution">Lo deshabilito mientras se envía y muestro un spinner.</div></div>
+                  <div class="foot"><span class="mem"><svg><use href="#i-brain"/></svg> 2</span><span class="ok"><svg><use href="#i-check"/></svg> Aprobar</span></div>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="col" data-s="done">
+            <header><span class="sd"></span>Hecho <span class="n">2</span></header>
+            <div class="stack">
+              <article class="card" data-st="done">
+                <div class="body">
+                  <div class="meta"><span class="id">#9</span><span class="ago">ayer</span></div>
+                  <h4>Typo en el footer: «Contactanos»</h4>
+                </div>
+              </article>
+              <article class="card hide-sm" data-st="done">
+                <div class="body">
+                  <div class="meta"><span class="id">#8</span><span class="ago">ayer</span></div>
+                  <h4>Falta el texto alternativo en las fotos del equipo</h4>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+        <div class="toast" id="toast" role="status" aria-live="polite">
+          <span class="ic"><svg><use href="#i-bell"/></svg></span>
+          <span id="toast-t"><b>Claude</b> tomó #16</span>
+        </div>
+      </div>
+
+      <div class="flow-strip reveal" aria-hidden="true">
+        <span><i style="background:var(--ink-2)"></i>Capturado</span>→
+        <span><i style="background:var(--accent)"></i>Claude trabajando</span>→
+        <span><i style="background:var(--amber)"></i>Para revisar</span>→
+        <span><i style="background:var(--green)"></i>Hecho</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROBLEMA ============ -->
+  <section class="section" id="problema">
+    <div class="wrap">
+      <div class="center">
+        <span class="eyebrow reveal">El problema</span>
+        <h2 class="reveal">Los detalles pequeños<br><span class="soft">se pierden entre sesiones.</span></h2>
+        <p class="lead reveal">Ves algo mal mientras haces otra cosa. Lo apuntas en una nota suelta, o te lo guardas para después, y cuando abres Claude Code ya no recuerdas qué era ni dónde lo viste. Y explicarlo otra vez cuesta más que arreglarlo.</p>
+      </div>
+
+      <div class="compare">
+        <div class="panel bad reveal">
+          <div class="panel-head"><span class="tag"></span>Sin record-mind</div>
+          <div class="chat">
+            <div class="note-scrap">TODO: logo safari?? · título 2px · menú móvil (¿cuál?)</div>
+            <div class="msg you">¿Te acuerdas del detalle del menú en móvil que te comenté ayer?</div>
+            <div class="msg ai">No tengo contexto de sesiones anteriores. ¿Me describes qué pasaba y en qué pantalla?</div>
+            <div class="sigh">…buscar la captura, explicarlo otra vez.</div>
+          </div>
+        </div>
+        <div class="panel good reveal">
+          <div class="panel-head"><span class="tag"></span>Con record-mind</div>
+          <div class="chat">
+            <div class="sys"><b>list_tasks</b>(cwd) → 3 pendientes en mi-proyecto</div>
+            <div class="msg ai">Tomo el #16: el menú con letra más pequeña en móvil. Veo la captura. Engram recuerda que el proyecto usa <code>clamp()</code> para los tamaños, así que lo aplico igual.</div>
+            <div class="sys"><b>mem_save</b>("Navbar: tamaño de fuente con clamp en móvil")</div>
+            <div class="sys ok"><b>complete_task</b>(16) → Para revisar · 1 archivo · 3 memorias</div>
+          </div>
+        </div>
+      </div>
+      <p class="problem-foot reveal">record-mind guarda el <strong>qué</strong> y el <strong>dónde</strong>; Engram aporta el <strong>cómo lo hacemos aquí</strong>.</p>
+    </div>
+  </section>
+
+  <!-- ============ CÓMO FUNCIONA ============ -->
+  <section class="section" id="como-funciona" style="padding-top:40px">
+    <div class="wrap">
+      <div class="center">
+        <span class="eyebrow reveal">Cómo funciona</span>
+        <h2 class="reveal">Cuatro columnas.<br><span class="soft">Tú solo capturas y apruebas.</span></h2>
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="num">01</span>
+          <span class="st"><i style="background:var(--ink-2)"></i>Capturado</span>
+          <h3>Lo capturas al vuelo</h3>
+          <p>Atajo global, escribes la nota, pegas o arrastras la captura y <kbd>Enter</kbd>. El proyecto sale de la sesión activa de Claude Code.</p>
+          <div class="term"><span class="p">$ </span>record-mind add
+  "No carga el logo"
+  -i captura.png</div>
+        </div>
+        <div class="step reveal">
+          <span class="num">02</span>
+          <span class="st"><i style="background:var(--accent)"></i>Claude trabajando</span>
+          <h3>Claude lo toma</h3>
+          <p>Con <code>/pendientes</code>, Claude lee el tablero de tu proyecto por MCP, abre la tarea con sus capturas y la reclama.</p>
+          <div class="term"><span class="p">&gt; </span>list_tasks()
+<span class="p">&gt; </span>claim_task(16)</div>
+        </div>
+        <div class="step reveal">
+          <span class="num">03</span>
+          <span class="st"><i style="background:var(--violet)"></i>Con memoria</span>
+          <h3>Resuelve con Engram</h3>
+          <p>Consulta las convenciones y decisiones del proyecto antes de tocar nada, y guarda lo que aprende para la próxima vez.</p>
+          <div class="term"><span class="p">&gt; </span>mem_search("menú móvil")
+<span class="p">&gt; </span>mem_save(...)</div>
+        </div>
+        <div class="step reveal">
+          <span class="num">04</span>
+          <span class="st"><i style="background:var(--amber)"></i>Para revisar</span>
+          <h3>Tú decides</h3>
+          <p>Claude nunca marca nada como hecho. Te deja un resumen y los archivos que tocó; apruebas o devuelves con una nota.</p>
+          <div class="term"><span class="p">$ </span>record-mind approve 16
+<span class="p">$ </span>record-mind reopen 16
+  "falta en el footer"</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FUNCIONES ============ -->
+  <section class="section" id="funciones">
+    <div class="wrap">
+      <div class="center">
+        <span class="eyebrow reveal">Funciones</span>
+        <h2 class="reveal">Hecho para no<br><span class="soft">sacarte del flujo.</span></h2>
+        <p class="lead reveal">Una app de escritorio ligera en Rust y Tauri, un servidor MCP y una CLI. Todo local.</p>
+      </div>
+
+      <div class="bento">
+        <div class="tile w4 reveal">
+          <div class="ico"><svg><use href="#i-camera"/></svg></div>
+          <h3>Captura rápida desde cualquier app</h3>
+          <p><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Espacio</kbd> abre una ventanita encima de lo que estés haciendo. Pega con <kbd>Ctrl</kbd> <kbd>V</kbd>, recorta con <kbd>Win</kbd> <kbd>Shift</kbd> <kbd>S</kbd> o arrastra una imagen.</p>
+          <div class="capture-mock" aria-hidden="true">
+            <div class="field">El menú se ve con letra más pequeña en móvil<span class="caret"></span></div>
+            <div class="thumb"></div>
+            <div class="bar"><span class="proj">mi-proyecto</span> desde la sesión activa <span class="go"><kbd>Enter</kbd> guardar</span></div>
+          </div>
+        </div>
+
+        <div class="tile reveal">
+          <div class="ico"><svg><use href="#i-board"/></svg></div>
+          <h3>Tablero en vivo</h3>
+          <p>Arrastra y suelta entre columnas. Cualquier escritura (Claude por MCP, la CLI o la app) lo refresca al instante y te avisa.</p>
+          <div class="mini-cols" aria-hidden="true">
+            <div><b><i style="background:var(--ink-2)"></i>Capt.</b><span></span><span></span></div>
+            <div><b><i style="background:var(--accent)"></i>Claude</b><span></span></div>
+            <div><b><i style="background:var(--amber)"></i>Revisar</b><span></span></div>
+            <div><b><i style="background:var(--green)"></i>Hecho</b><span></span><span></span></div>
+          </div>
+        </div>
+
+        <div class="tile w3 reveal">
+          <div class="ico"><svg><use href="#i-file"/></svg></div>
+          <h3>Todo el contexto en cada tarjeta</h3>
+          <ul class="detail-list">
+            <li><svg><use href="#i-check"/></svg>Capturas, nota e historial completo</li>
+            <li><svg><use href="#i-check"/></svg>Lo que hizo Claude y los archivos que tocó</li>
+            <li><svg><use href="#i-check"/></svg>Memorias de Engram consultadas, nuevas y relacionadas</li>
+            <li><svg><use href="#i-check"/></svg>Responde a Claude cuando se queda con una duda</li>
+          </ul>
+          <div class="actions-row" aria-hidden="true">
+            <span class="ap"><svg><use href="#i-check"/></svg>Aprobar</span>
+            <span class="dv"><svg><use href="#i-undo"/></svg>Devolver con nota</span>
+          </div>
+        </div>
+
+        <div class="tile w3 reveal">
+          <div class="ico"><svg><use href="#i-plug"/></svg></div>
+          <h3>MCP embebido</h3>
+          <p>Mientras la app está abierta, el servidor MCP vive en <code>127.0.0.1:4545/mcp</code>. También funciona por stdio, para que Claude Code lo lance solo.</p>
+          <div class="chips">
+            <span class="chip on">list_tasks</span><span class="chip on">get_task</span><span class="chip on">claim_task</span>
+            <span class="chip on">complete_task</span><span class="chip">add_comment</span><span class="chip">create_task</span>
+          </div>
+        </div>
+
+        <div class="tile w3 reveal">
+          <div class="ico"><svg><use href="#i-term"/></svg></div>
+          <h3>CLI para la terminal</h3>
+          <p>Lo mismo que la app, desde la línea de comandos.</p>
+          <div class="term"><span class="p">$ </span>record-mind list
+<span class="c">  #16  capturado   El menú se ve con letra más…</span>
+<span class="c">  #14  </span><span class="y">trabajando</span><span class="c">  No carga el logo del encab…</span>
+<span class="p">$ </span>record-mind approve 12
+<span class="g">  ✓ #12 → Hecho</span></div>
+        </div>
+
+        <div class="tile w3 reveal">
+          <div class="ico"><svg><use href="#i-tray"/></svg></div>
+          <h3>Siempre a mano, nunca en medio</h3>
+          <p>Cerrar la ventana la esconde en la bandeja del sistema: el atajo y el MCP siguen vivos. Tus tareas viven en una base SQLite local, en tu máquina.</p>
+          <div class="chips"><span class="chip">Rust</span><span class="chip">Tauri 2</span><span class="chip">SQLite</span><span class="chip">React</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ENGRAM ============ -->
+  <section class="section" id="engram">
+    <div class="wrap">
+      <div class="engram-grid">
+        <div>
+          <span class="eyebrow reveal">Con Engram</span>
+          <h2 class="reveal">Construido sobre Engram.<br><span class="soft">Sin tocar su base.</span></h2>
+          <p class="lead reveal">record-mind se apoya en <a class="pink" href="https://engram.gentlemanprogramming.com/" target="_blank" rel="noopener">Engram</a>, la memoria persistente para agentes, para que cada pendiente se resuelva como se resuelven las cosas en tu proyecto.</p>
+          <ul class="points">
+            <li class="reveal">
+              <span class="pi"><svg><use href="#i-db"/></svg></span>
+              <div><h4>Cada uno con su base</h4><p>Las tareas viven en <code>record-mind.db</code>, separadas de tus memorias.</p></div>
+            </li>
+            <li class="reveal">
+              <span class="pi"><svg><use href="#i-lock"/></svg></span>
+              <div><h4>Engram en solo lectura</h4><p>record-mind abre <code>engram.db</code> solo para saber qué sesión está activa, deducir el proyecto y sugerir memorias relacionadas.</p></div>
+            </li>
+            <li class="reveal">
+              <span class="pi"><svg><use href="#i-brain"/></svg></span>
+              <div><h4>Claude guarda lo aprendido</h4><p>Las memorias nuevas pasan por <code>mem_save</code>, a través de Engram, nunca escribiendo directo en su base.</p></div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="diagram reveal" aria-label="Diagrama: Claude Code habla con record-mind por MCP y guarda memorias en Engram; record-mind lee Engram en solo lectura">
+          <span class="lbl">Cómo encajan</span>
+          <div class="dg">
+            <div class="node claude">
+              <div class="t"><span class="em"><svg><use href="#i-spark"/></svg></span>Claude Code</div>
+              <div class="d">/pendientes</div>
+            </div>
+            <div class="link"><span class="ln"></span><span class="lt">MCP<br>claim · complete</span></div>
+            <div class="link l2"><span class="ln"></span><span class="lt">mem_search<br>mem_save</span></div>
+            <div class="node">
+              <div class="t"><img src="icon.svg" alt="">record-mind</div>
+              <div class="d">record-mind.db<br>tareas · capturas · historial</div>
+            </div>
+            <div class="node">
+              <div class="t"><span class="em"><svg><use href="#i-brain"/></svg></span>Engram</div>
+              <div class="d">engram.db<br>memorias · sesiones</div>
+            </div>
+            <div class="ro">
+              <svg><use href="#i-lock"/></svg>
+              <span>record-mind lee <b>engram.db</b> en <b>solo lectura</b>: sesión activa, proyecto y memorias relacionadas.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MCP ============ -->
+  <section class="section" id="mcp">
+    <div class="wrap">
+      <div class="center">
+        <span class="eyebrow reveal">Herramientas MCP</span>
+        <h2 class="reveal">Seis herramientas.<br><span class="soft">Un flujo claro.</span></h2>
+        <p class="lead reveal">Lo justo para que Claude lea, trabaje y te devuelva cada tarea con un resumen honesto.</p>
+      </div>
+      <div class="tools reveal">
+        <div class="tool-row head"><span>Herramienta</span><span>Qué hace</span><span>Estado</span></div>
+        <div class="tool-row"><code>list_tasks</code><p>Tareas del proyecto (deducido de <code>cwd</code>); por defecto, capturadas y en curso.</p><span class="mv">lectura</span></div>
+        <div class="tool-row"><code>get_task</code><p>Nota, capturas como imágenes, historial, notas de devolución y memorias de Engram relacionadas.</p><span class="mv">lectura</span></div>
+        <div class="tool-row"><code>claim_task</code><p>Claude reclama la tarea y empieza a trabajar.</p><span class="mv"><i style="background:var(--ink-2)"></i>→<i style="background:var(--accent)"></i> trabajando</span></div>
+        <div class="tool-row"><code>complete_task</code><p>La deja para revisar, con resumen, archivos tocados y memorias consultadas o creadas.</p><span class="mv"><i style="background:var(--accent)"></i>→<i style="background:var(--amber)"></i> para revisar</span></div>
+        <div class="tool-row"><code>add_comment</code><p>Avance, duda o bloqueo en el historial; aparece en la tarjeta.</p><span class="mv">historial</span></div>
+        <div class="tool-row"><code>create_task</code><p>Registra un pendiente que Claude detectó de paso, para no desviarse.</p><span class="mv"><i style="background:var(--ink-2)"></i> capturado</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOJA DE RUTA ============ -->
+  <section class="section" id="hoja-de-ruta">
+    <div class="wrap">
+      <div class="center">
+        <span class="eyebrow reveal">Hoja de ruta</span>
+        <h2 class="reveal">Hecho en público,<br><span class="soft">fase a fase.</span></h2>
+      </div>
+      <div class="road">
+        <div class="phase is-done reveal">
+          <div class="top"><span class="ph">FASE 0</span><span class="badge done">✓ listo</span></div>
+          <h3>Núcleo</h3>
+          <ul><li>Base de tareas y lector de Engram</li><li>Servidor MCP (stdio y HTTP)</li><li>CLI y skill <code>/pendientes</code></li></ul>
+        </div>
+        <div class="phase is-done reveal">
+          <div class="top"><span class="ph">FASE 1</span><span class="badge done">✓ listo</span></div>
+          <h3>App de escritorio</h3>
+          <ul><li>Captura con atajo global y portapapeles</li><li>Tablero en vivo</li><li>Detalle con aprobar / devolver</li></ul>
+        </div>
+        <div class="phase is-next reveal">
+          <div class="top"><span class="ph">FASE 2</span><span class="badge next">siguiente</span></div>
+          <h3>Mejores capturas</h3>
+          <ul><li>Anotar capturas con flechas y recuadros</li><li>Recorte de pantalla nativo</li><li>Atajo configurable</li></ul>
+        </div>
+        <div class="phase reveal">
+          <div class="top"><span class="ph">FASE 3</span><span class="badge later">después</span></div>
+          <h3>Más inteligencia</h3>
+          <ul><li>Grafo tareas ↔ memorias ↔ sesiones</li><li>Detectar patrones repetidos</li><li>«Resolver con Claude» y notas de voz</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INSTALAR ============ -->
+  <section class="section" id="instalar" style="padding-bottom:0">
+    <div class="wrap">
+      <div class="cta reveal">
+        <span class="eyebrow">Empieza</span>
+        <h2>Deja de perder<br><span class="grad">los detalles.</span></h2>
+        <p class="lead">Descarga el instalador, conéctalo con Claude Code y captura tu primer pendiente. Sin Rust, sin Node, sin compilar nada.</p>
+
+        <!-- Enlaces de descarga: rutas relativas a la carpeta del sitio (site/downloads/).
+             Si el instalador se publica en otro sitio (p. ej. GitHub Releases), cambia el href aquí y en el paso 1. -->
+        <div class="dl">
+          <a class="btn btn-primary btn-lg" href="downloads/record-mind_0.1.0_x64-setup.exe" download>
+            <svg><use href="#i-save"/></svg> Descargar para Windows
+          </a>
+          <span class="dl-meta">v0.1.0 · Windows 10/11 x64 · instalador .exe · 4,4 MB</span>
+        </div>
+
+        <div class="install">
+          <div class="cmd">
+            <span class="k">1</span>
+            <div class="tx"><small>Instala record-mind</small><span class="plain">Ejecuta el instalador. La app se queda en la bandeja del sistema, con el atajo y el MCP activos.</span></div>
+            <a class="copy" href="downloads/record-mind_0.1.0_x64-setup.exe" download aria-label="Descargar instalador" title="Descargar instalador"><svg><use href="#i-save"/></svg></a>
+          </div>
+          <div class="cmd">
+            <span class="k">2</span>
+            <div class="tx"><small>Conéctala a Claude Code (con la app abierta)</small><code><span class="p">$ </span>claude mcp add --transport http -s user record-mind http://127.0.0.1:4545/mcp</code></div>
+            <button class="copy" data-copy="claude mcp add --transport http -s user record-mind http://127.0.0.1:4545/mcp" aria-label="Copiar comando"><svg><use href="#i-copy"/></svg></button>
+          </div>
+          <div class="cmd">
+            <span class="k">3</span>
+            <div class="tx"><small>Añade la skill <code class="inl">/pendientes</code></small><span class="plain">Guarda <code class="inl">SKILL.md</code> en <code class="inl">~/.claude/skills/pendientes/</code></span></div>
+            <a class="copy" href="downloads/pendientes/SKILL.md" download="SKILL.md" aria-label="Descargar SKILL.md" title="Descargar SKILL.md"><svg><use href="#i-save"/></svg></a>
+          </div>
+          <div class="cmd">
+            <span class="k">4</span>
+            <div class="tx"><small>Captura con <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Espacio</kbd> y pídele a Claude que resuelva</small><code><span class="p">&gt; </span>/pendientes</code></div>
+            <button class="copy" data-copy="/pendientes" aria-label="Copiar comando"><svg><use href="#i-copy"/></svg></button>
+          </div>
+        </div>
+        <p class="req">El MCP vive dentro de la app: funciona mientras esté abierta o en la bandeja. Por ahora solo hay instalador para Windows.</p>
+
+        <details class="src">
+          <summary>¿Prefieres compilar desde el código?</summary>
+          <div class="src-body">
+            <p>Solo si quieres contribuir o probar la última versión. Requiere Rust (rustup), Node.js y, en Windows, Visual Studio Build Tools con «Desarrollo de escritorio con C++».</p>
+            <div class="term"><span class="c"># CLI y servidor MCP por stdio → target/release/record-mind.exe</span>
+<span class="p">$ </span>cargo build --release
+<span class="c"># App de escritorio → instalador en target/release/bundle/nsis</span>
+<span class="p">$ </span>cd app &amp;&amp; npm install &amp;&amp; npm run tauri build
+<span class="c"># Opcional: MCP por stdio (Claude Code lo lanza solo, sin la app abierta)</span>
+<span class="p">$ </span>claude mcp add -s user record-mind -- record-mind mcp</div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="#" class="brand"><img src="icon.svg" alt="" width="24" height="24">record-mind</a>
+    <nav aria-label="Pie de página">
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#funciones">Funciones</a>
+      <a href="#mcp">MCP</a>
+      <a href="https://engram.gentlemanprogramming.com/" target="_blank" rel="noopener">Engram</a>
+    </nav>
+    <p class="stack">Proyecto personal. Hecho con Rust, Tauri y React, sobre la memoria de <a href="https://engram.gentlemanprogramming.com/" target="_blank" rel="noopener">Engram</a>.</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Nav con fondo al hacer scroll
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 8);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Aparición al entrar en pantalla
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }, { threshold: 0.01, rootMargin: "0px 0px -40px 0px" });
+  // Red de seguridad: nada se queda invisible si el observador no llega a dispararse
+  addEventListener("load", () => setTimeout(() => {
+    document.querySelectorAll(".reveal:not(.in)").forEach((el) => {
+      if (el.getBoundingClientRect().top < innerHeight) el.classList.add("in");
+    });
+  }, 600));
+  document.querySelectorAll(".reveal").forEach((el, i) => {
+    el.style.transitionDelay = (el.closest(".steps, .bento, .road, .compare, .points") ? (i % 4) * 70 : 0) + "ms";
+    io.observe(el);
+  });
+
+  // Copiar comandos
+  document.querySelectorAll(".copy").forEach((b) => {
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); } catch (_) { return; }
+      b.classList.add("done");
+      b.innerHTML = '<svg><use href="#i-check"/></svg>';
+      setTimeout(() => { b.classList.remove("done"); b.innerHTML = '<svg><use href="#i-copy"/></svg>'; }, 1600);
+    });
+  });
+
+  // Tablero: la tarjeta #16 recorre las columnas
+  const board = document.getElementById("board");
+  const card = document.getElementById("mover");
+  const toast = document.getElementById("toast");
+  const toastT = document.getElementById("toast-t");
+  if (!board || !card) return;
+
+  const cols = ["inbox", "progress", "review", "done"];
+  const msgs = {
+    progress: "<b>Claude</b> tomó #16 · 3 memorias de Engram",
+    review: "<b>#16</b> listo para revisar",
+    done: "<b>#16</b> aprobado",
+    inbox: "Nuevo pendiente <b>#16</b> capturado",
+  };
+  const stack = (s) => board.querySelector(`.col[data-s="${s}"] .stack`);
+  const counts = () => board.querySelectorAll(".col").forEach((c) => (c.querySelector(".n").textContent = c.querySelectorAll(".card").length));
+  let idx = 0, toastTimer;
+
+  function showToast(html) {
+    toastT.innerHTML = html;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 1900);
+  }
+
+  // En pantallas estrechas el tablero se desplaza en horizontal: sigue a la tarjeta
+  function follow(s) {
+    if (board.scrollWidth <= board.clientWidth + 2) return;
+    const col = board.querySelector(`.col[data-s="${s}"]`);
+    board.scrollTo({ left: col.offsetLeft - 10, behavior: reduce ? "auto" : "smooth" });
+  }
+
+  function moveTo(next) {
+    const s = cols[next];
+    follow(s);
+    const first = card.getBoundingClientRect();
+    card.dataset.st = s;
+    card.querySelector(".ok-t").textContent = s === "done" ? "Aprobada" : "Aprobar";
+    card.querySelector(".ago").textContent = "ahora";
+    stack(s).prepend(card);
+    counts();
+    if (reduce) return;
+    const last = card.getBoundingClientRect();
+    const dx = first.left - last.left, dy = first.top - last.top;
+    card.classList.add("flying");
+    card.animate(
+      [{ transform: `translate(${dx}px, ${dy}px) rotate(1.5deg)` }, { transform: "translate(0,0) rotate(0)" }],
+      { duration: 720, easing: "cubic-bezier(.2,.75,.2,1)" }
+    ).onfinish = () => card.classList.remove("flying");
+  }
+
+  function tick() {
+    idx = (idx + 1) % cols.length;
+    if (idx === 0) {
+      // Reinicia: desaparece de Hecho y vuelve a entrar en Capturado
+      card.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" }).onfinish = () => {
+        card.dataset.st = "inbox";
+        stack("inbox").prepend(card);
+        follow("inbox");
+        counts();
+        card.animate([{ opacity: 0, transform: "translateY(-8px)" }, { opacity: 1, transform: "none" }], { duration: 420, fill: "forwards" });
+        showToast(msgs.inbox);
+      };
+    } else {
+      moveTo(idx);
+      showToast(msgs[cols[idx]]);
+    }
+  }
+
+  let timer = null;
+  const vis = new IntersectionObserver(([e]) => {
+    if (e.isIntersecting && !timer) timer = setInterval(tick, 2800);
+    else if (!e.isIntersecting && timer) { clearInterval(timer); timer = null; }
+  }, { threshold: 0.25 });
+  vis.observe(board);
+})();
+</script>
+</body>
+</html>
