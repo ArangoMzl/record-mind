@@ -1,7 +1,7 @@
 //! Comandos que invoca la interfaz.
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use rm_core::{Memory, MemoryRelation, NewTask, SessionInfo, Status, Task, TaskDetail, TaskFilter};
+use rm_core::{Memory, MemoryRelation, NewTask, SessionInfo, Status, Task, TaskDetail, TaskEdit, TaskFilter};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -277,6 +277,25 @@ pub fn reopen_task(state: State<AppState>, id: i64, note: String) -> Res<Task> {
 #[tauri::command]
 pub fn comment_task(state: State<AppState>, id: i64, message: String) -> Res<()> {
     state.store().comment(id, "user", &message).map(|_| ()).map_err(err)
+}
+
+#[derive(Deserialize)]
+pub struct EditInput {
+    pub title: Option<String>,
+    pub note: Option<String>,
+    pub priority: Option<i64>,
+    pub project: Option<String>,
+}
+
+#[tauri::command]
+pub fn update_task(state: State<AppState>, id: i64, edit: EditInput) -> Res<Task> {
+    let edit = TaskEdit { title: edit.title, note: edit.note, priority: edit.priority, project: edit.project };
+    state.store().update(id, edit, "user").map_err(err)
+}
+
+#[tauri::command]
+pub fn duplicate_task(state: State<AppState>, id: i64) -> Res<Task> {
+    state.store().duplicate(id, "user").map_err(err)
 }
 
 #[tauri::command]

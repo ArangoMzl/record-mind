@@ -119,6 +119,8 @@ pub fn run() {
             commands::approve_task,
             commands::reopen_task,
             commands::comment_task,
+            commands::update_task,
+            commands::duplicate_task,
             commands::delete_task,
             commands::hide_capture,
             commands::open_board,
