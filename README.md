@@ -195,7 +195,7 @@ docs/                    documentación
   nativo, atajos configurables.
 - [x] **Fase 3**: errores repetidos → reglas sugeridas para `CLAUDE.md` (aprobadas desde el
   tablero) y dictado por voz con el de Windows. El grafo de tareas, memorias y sesiones se deja a
-  [Engram View](https://github.com/ArangoMzl/engram-view), que ya lo tiene.
+  [Engram View](https://engram-view.arkevo.pro/), que ya lo tiene.
 - [ ] **Más adelante**: «Resolver con Claude» desde el tablero.
 
 ## Licencia
