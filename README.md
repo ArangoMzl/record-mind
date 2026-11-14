@@ -36,9 +36,17 @@ y las deja **para que tú las revises**. Nunca se marcan como hechas sin tu apro
 ## Funciones
 
 - **Captura rápida desde cualquier app** con <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Espacio</kbd>:
-  escribes la nota, pegas una captura (<kbd>Ctrl</kbd>+<kbd>V</kbd>, o recortas con
-  <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) o la arrastras, y <kbd>Enter</kbd>. El proyecto se
-  asigna solo según tu sesión activa de Claude Code.
+  escribes la nota, añades una captura y <kbd>Enter</kbd>. El proyecto sale por defecto de la
+  conversación de Claude Code con actividad más reciente; si tienes varias abiertas, todas aparecen
+  marcadas en el selector.
+- **Recorte de pantalla integrado**: «Recortar pantalla» (en la captura o en la bandeja) congela
+  el monitor donde está el ratón; arrastras sobre lo que quieres y queda añadido al pendiente.
+  También puedes pegar con <kbd>Ctrl</kbd>+<kbd>V</kbd> o arrastrar una imagen.
+- **Anota la captura antes de guardarla**: clic en la miniatura y marca lo que importa con
+  flechas, recuadros, lápiz o números. Se puede deshacer y volver a editar, y Claude recibe la
+  imagen ya anotada.
+- **Tus proyectos de Claude Code, siempre a mano**: el tablero y la captura muestran todas las
+  carpetas donde has usado Claude Code, aunque no tengan tareas ni una conversación abierta.
 - **Tablero en vivo** con arrastrar y soltar. Cualquier cambio (Claude por MCP, la CLI o la app)
   se ve al instante, con avisos como «Claude tomó #12» o «#12 lista para revisar».
 - **Tú eliges qué trabaja Claude**: marcas tarjetas con **«+ Para Claude»** y `/pendientes`
@@ -69,7 +77,7 @@ y las deja **para que tú las revises**. Nunca se marcan como hechas sin tu apro
                               └──── lee (solo lectura) ────▶   ~/.engram/engram.db
 ```
 
-1. **Capturas** una tarea. Queda en «Capturado», en el proyecto de tu sesión activa.
+1. **Capturas** una tarea. Queda en «Capturado», en el proyecto de tu conversación más reciente.
 2. **Eliges** cuáles trabajar (opcional) con «+ Para Claude».
 3. En tu sesión escribes **`/pendientes`**. Claude toma cada tarea, consulta Engram, la arregla,
    la verifica y la entrega con un resumen honesto.
@@ -123,7 +131,7 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 ### CLI
 
 ```bash
-record-mind add "No carga el logo del encabezado" -i captura.png   # proyecto = sesión activa
+record-mind add "No carga el logo del encabezado" -i captura.png   # proyecto = conversación más reciente
 record-mind add "Subir el título" -p mi-proyecto --priority 1
 record-mind list                    # capturado, trabajando y para revisar (--all incluye hechas)
 record-mind show 3                  # nota, capturas, resolución, memorias e historial
@@ -131,7 +139,7 @@ record-mind queue 3 5               # en cola para /pendientes (--off para quita
 record-mind approve 3               # Para revisar → Hecho
 record-mind reopen 3 "falta también el subtítulo"
 record-mind release 3               # saca una tarea de «Claude trabajando»
-record-mind where                   # rutas y sesión activa detectada
+record-mind where                   # rutas y sesiones activas detectadas
 ```
 
 ## Desarrollo
@@ -172,7 +180,8 @@ docs/                    documentación
 - [x] **Fase 0**: núcleo, servidor MCP, CLI y skill.
 - [x] **Fase 1**: app de escritorio con captura rápida, tablero en vivo, cola para `/pendientes`,
   bloqueo mientras Claude trabaja, inicio con Windows.
-- [ ] **Fase 2**: anotar capturas (flechas, recuadros), recorte de pantalla nativo, atajo configurable.
+- [ ] **Fase 2**: ~~anotar capturas (flechas, recuadros)~~ ✓, ~~recorte de pantalla nativo~~ ✓,
+  atajo configurable.
 - [ ] **Fase 3**: grafo tareas ↔ memorias ↔ sesiones, detección de errores repetidos con reglas
   sugeridas para `CLAUDE.md`, «Resolver con Claude» desde el tablero, notas de voz.
 

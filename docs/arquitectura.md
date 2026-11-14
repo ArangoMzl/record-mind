@@ -81,10 +81,11 @@ avisos («Claude tomó #4», «#4 lista para revisar», «Claude pregunta en #4�
 record-mind **nunca escribe** en la base de Engram, que mantiene índices, versiones y una cola de
 sincronización. La abre con `SQLITE_OPEN_READ_ONLY` y la usa para tres cosas:
 
-1. **Sesión activa**: la sesión abierta con actividad más reciente (inicio, concesión, último
-   prompt o última memoria) en las últimas 12 horas. La concesión de Engram
-   (`runtime_lease_expires_at`) no siempre se renueva y hay sesiones que nunca se cierran, por eso
-   no basta con ella. La captura rápida usa este proyecto por defecto.
+1. **Sesión activa (respaldo)**: solo cuando no se encuentran conversaciones de Claude Code (ver
+   «Sesiones activas» más abajo). Es la sesión abierta con actividad más reciente (inicio,
+   renovación de la concesión, último prompt o última memoria) en las últimas 12 horas. La
+   concesión (`runtime_lease_expires_at`) vence 30 minutos después de renovarse, así que se usa
+   menos 30 minutos: tal cual es una fecha futura y hacía ganar a cualquier sesión recién abierta.
 2. **Proyecto de una carpeta**: `project_aliases` y luego la sesión cuya carpeta contiene el `cwd`
    (la más específica). Si no hay, el nombre de la carpeta en minúsculas.
 3. **Memorias relacionadas**: búsqueda FTS5 (`observations_fts`, con tokenizador de trigramas) con
@@ -92,6 +93,37 @@ sincronización. La abre con `SQLITE_OPEN_READ_ONLY` y la usa para tres cosas:
 
 Las memorias nuevas las guarda **Claude** con `mem_save` durante `/pendientes`, a través de Engram,
 y su id queda enlazado a la tarea con `complete_task`.
+
+## Proyectos de Claude Code
+
+El tablero y la captura no solo ofrecen los proyectos con tareas: también los que conoce Claude
+Code, para poder capturar en uno que todavía no tiene ninguna (`rm_core::claude_code`).
+
+- Se leen las carpetas de `projects` en `~/.claude.json` (o `$CLAUDE_CONFIG_DIR/.claude.json`).
+  **Solo lectura**: nunca se toca la configuración de Claude.
+- Se descartan la carpeta de usuario, `~/.claude` (sesiones de reserva) y todo lo que cuelga de
+  `AppData` (temporales y espacios de trabajo de Claude Desktop), además de las carpetas que ya
+  no existen.
+- Cada carpeta se nombra con `resolve_project`, igual que Engram, el MCP y `/pendientes`.
+- Primero van los proyectos con tareas (el más reciente primero) y después los demás, en orden
+  alfabético y apagados en la barra lateral.
+
+### Sesiones activas
+
+Puede haber varias conversaciones abiertas a la vez, en proyectos distintos o en el mismo, así que
+no hay una sola «sesión activa»: hay una lista (`claude_code::live_sessions`).
+
+- Claude Code guarda cada conversación en `~/.claude/projects/<carpeta>/<sesión>.jsonl` (o bajo
+  `$CLAUDE_CONFIG_DIR/projects`) y lo reescribe con cada mensaje. Cuenta como activa si se modificó
+  en los últimos **30 minutos**. Su carpeta es el primer `cwd` de sus líneas y su id es el mismo
+  que el de la sesión de Engram.
+- Se ignoran los `.jsonl` de subagentes (dentro de la carpeta de la sesión) y las carpetas internas
+  (mismo filtro que los proyectos).
+- El tablero muestra un renglón por proyecto con su actividad más reciente y cuántas
+  conversaciones tiene, y las vuelve a pedir cada 30 s (`live_sessions`): abrir o cerrar una
+  conversación no escribe en la base de tareas. La captura marca todos esos proyectos y elige por
+  defecto el de la conversación más reciente. Una tarea nueva queda enlazada a la conversación
+  activa de su proyecto.
 
 ## La app de escritorio
 
@@ -131,4 +163,5 @@ Por eso:
 | `RECORD_MIND_HOME` | Carpeta de datos (por defecto `~/.record-mind`) |
 | `RECORD_MIND_PORT` | Puerto del MCP embebido en la app (por defecto `4545`) |
 | `ENGRAM_DB` / `ENGRAM_DATA_DIR` | Base de Engram a leer (por defecto `~/.engram/engram.db`) |
+| `CLAUDE_CONFIG_DIR` | Carpeta de la configuración de Claude Code de donde se leen los proyectos (por defecto `~`) |
 | `RUST_LOG` | Nivel de logs (`tracing`), siempre por stderr |
