@@ -42,6 +42,34 @@ impl AppState {
     }
 }
 
+/// El tamaño inicial del tablero (tauri.conf.json) es también su mínimo: solo crece.
+///
+/// Sin marco, Windows aplica el mínimo al rectángulo exterior, que incluye el borde invisible
+/// de redimensionar (~8 px por lado): con el mínimo tal cual, el contenido se podía encoger
+/// 16 px. Se suma ese borde. Y en una pantalla más pequeña que el mínimo (p. ej. 1366×768, o
+/// 1080p al 150 %) la ventana no cabría ni se podría encoger, así que baja al área de trabajo.
+fn set_board_min_size(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("main") else { return };
+    let Some(cfg) = app.config().app.windows.iter().find(|c| c.label == "main") else { return };
+    let (Some(min_w), Some(min_h)) = (cfg.min_width, cfg.min_height) else { return };
+    let Ok(scale) = w.scale_factor() else { return };
+    let (Ok(outer), Ok(inner)) = (w.outer_size(), w.inner_size()) else { return };
+    let frame_w = outer.width.saturating_sub(inner.width) as f64 / scale;
+    let frame_h = outer.height.saturating_sub(inner.height) as f64 / scale;
+
+    let (mut want_w, mut want_h) = (min_w, min_h);
+    if let Ok(Some(monitor)) = w.current_monitor().or_else(|_| w.primary_monitor()) {
+        let area: LogicalSize<f64> = monitor.work_area().size.to_logical(scale);
+        if area.width < min_w || area.height < min_h {
+            want_w = min_w.min(area.width - frame_w);
+            want_h = min_h.min(area.height - frame_h);
+            let _ = w.set_size(LogicalSize::new(want_w, want_h));
+            let _ = w.center();
+        }
+    }
+    let _ = w.set_min_size(Some(LogicalSize::new(want_w + frame_w, want_h + frame_h)));
+}
+
 pub fn show_board(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
@@ -192,6 +220,7 @@ pub fn run() {
             shortcuts::init(&handle);
 
             build_tray(&handle)?;
+            set_board_min_size(&handle);
 
             // El tablero nace oculto (tauri.conf.json); al iniciar con Windows se queda en
             // la bandeja con el atajo listo, y en un arranque normal se muestra.

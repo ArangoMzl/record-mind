@@ -30,6 +30,7 @@ import { TaskContextMenu, type TaskAction } from "./TaskMenu";
 import { SettingsDialog } from "./SettingsDialog";
 import { RulesDialog } from "./RulesDialog";
 import { Toasts, type Toast } from "./Toasts";
+import { WindowControls } from "./WindowControls";
 
 export function BoardApp() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -253,10 +254,11 @@ export function BoardApp() {
       <Sidebar board={board} project={project} onProject={setProject} onSettings={() => setSettingsOpen(true)} onRules={() => setRulesOpen(true)} />
 
       <div className="flex min-h-0 flex-col">
-        <header className="flex items-center gap-3 border-b border-line px-6 py-3.5">
-          <div className="min-w-0">
-            <div className="eyebrow">{project ? "Proyecto" : "Todos los proyectos"}</div>
-            <h1 className="truncate text-[19px] font-semibold tracking-tight">
+        {/* La ventana no tiene marco: esta cabecera hace de barra de título (se arrastra y con doble clic maximiza). */}
+        <header data-tauri-drag-region className="flex items-center gap-3 border-b border-line px-6 py-3.5">
+          <div data-tauri-drag-region className="max-w-[40%] min-w-0 shrink-0">
+            <div data-tauri-drag-region className="eyebrow truncate">{project ? "Proyecto" : "Todos los proyectos"}</div>
+            <h1 data-tauri-drag-region className="truncate text-[19px] font-semibold tracking-tight">
               {project ?? "Tablero"}
               {reviewCount > 0 && (
                 <span className="ml-3 align-middle text-[12px] font-medium text-st-review">
@@ -265,8 +267,8 @@ export function BoardApp() {
               )}
             </h1>
           </div>
-          <div className="flex-1" />
-          <label className="flex w-72 items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50">
+          <div data-tauri-drag-region className="flex-1 self-stretch" />
+          <label className="flex w-72 min-w-0 shrink items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50">
             <Search size={15} />
             <input
               ref={searchRef}
@@ -275,15 +277,15 @@ export function BoardApp() {
               placeholder="Buscar pendientes"
               className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3"
             />
-            <span className="kbd">Ctrl K</span>
+            <span className="kbd max-lg:hidden">Ctrl K</span>
           </label>
           <button
             onClick={() => api.openCapture()}
-            className="flex items-center gap-2 rounded-xl bg-accent px-3.5 py-2 font-medium text-white shadow-[0_0_24px_var(--color-accent-glow)] transition hover:brightness-110"
+            className="flex shrink-0 items-center gap-2 rounded-xl bg-accent px-3.5 py-2 font-medium whitespace-nowrap text-white shadow-[0_0_24px_var(--color-accent-glow)] transition hover:brightness-110"
           >
             <Plus size={16} strokeWidth={2.5} />
             Capturar
-            <span className="flex gap-0.5 opacity-80">
+            <span className="flex gap-0.5 opacity-80 max-lg:hidden">
               {shortcut.map((k) => (
                 <span key={k} className="rounded bg-white/15 px-1 font-mono text-[10px]">
                   {k}
@@ -291,6 +293,7 @@ export function BoardApp() {
               ))}
             </span>
           </button>
+          <WindowControls />
         </header>
 
         {error && (
@@ -301,7 +304,8 @@ export function BoardApp() {
 
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
           <LayoutGroup>
-            <main className="grid min-h-0 flex-1 grid-cols-4 gap-4 overflow-x-auto p-5">
+            {/* El mínimo va en la pista y no en la columna: si no caben, se desplaza en horizontal en vez de solaparse. */}
+            <main className="grid min-h-0 flex-1 grid-cols-[repeat(4,minmax(200px,1fr))] gap-4 overflow-x-auto p-5">
               {STATUSES.map((s) => (
                 <Column
                   key={s.id}

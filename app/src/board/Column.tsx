@@ -33,7 +33,7 @@ export function Column(props: {
   return (
     <section
       ref={setNodeRef}
-      className={`relative flex min-h-0 min-w-[250px] flex-col rounded-2xl border transition-colors ${
+      className={`relative flex min-h-0 min-w-0 flex-col rounded-2xl border transition-colors ${
         isOver ? "border-accent/50 bg-accent-soft" : "border-line bg-surface/50"
       }`}
     >

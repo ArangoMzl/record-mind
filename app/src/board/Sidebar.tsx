@@ -27,9 +27,9 @@ export function Sidebar({
 
   return (
     <aside className="flex min-h-0 flex-col border-r border-line bg-base/70 backdrop-blur-xl">
-      <div className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-        <img src={iconUrl} alt="" className="size-8 drop-shadow-[0_0_12px_var(--color-accent-glow)]" />
-        <b className="text-[16px] font-bold tracking-tight">
+      <div data-tauri-drag-region className="flex items-center gap-2.5 px-5 pt-5 pb-4">
+        <img data-tauri-drag-region src={iconUrl} alt="" draggable={false} className="size-8 drop-shadow-[0_0_12px_var(--color-accent-glow)]" />
+        <b data-tauri-drag-region className="text-[16px] font-bold tracking-tight">
           record<span className="text-accent">·</span>mind
         </b>
       </div>
