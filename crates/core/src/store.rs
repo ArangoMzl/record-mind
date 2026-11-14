@@ -101,10 +101,10 @@ impl Store {
 
     pub fn open_default() -> Result<Self> {
         let root = crate::paths::data_dir();
-        if std::env::var_os("RECORD_MIND_HOME").is_none() {
-            if let Some(legacy) = crate::paths::legacy_data_dir() {
-                migrate_legacy(&legacy, &root)?;
-            }
+        if std::env::var_os("RECORD_MIND_HOME").is_none()
+            && let Some(legacy) = crate::paths::legacy_data_dir()
+        {
+            migrate_legacy(&legacy, &root)?;
         }
         Self::open(root)
     }
