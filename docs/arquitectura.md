@@ -132,7 +132,16 @@ no hay una sola «sesión activa»: hay una lista (`claude_code::live_sessions`)
   para no gastar memoria de WebView2 mientras nadie la abre.
 - **Bandeja**: cerrar el tablero lo esconde y solo «Salir» termina la app. El menú incluye
   «Iniciar con Windows» (`tauri-plugin-autostart`).
-- **Atajo global**: `tauri-plugin-global-shortcut` con `CommandOrControl+Shift+Space`.
+- **Atajos globales** (`shortcuts.rs`, `tauri-plugin-global-shortcut`): capturar pendiente
+  (por defecto `CommandOrControl+Shift+Space`) y, opcional, recortar pantalla. Se guardan en
+  `settings.json` en la carpeta de datos (`rm_core::settings`; si falta o está roto, valores por
+  defecto). Al cambiar uno se prueba a registrarlo antes de guardar: si Windows u otra app ya lo
+  tiene, se queda el anterior. Mientras el diálogo de Ajustes graba una combinación, todos los
+  atajos se desregistran (`pause_shortcuts`) para que la tecla llegue al grabador y no dispare su
+  acción; vuelven al terminar, al cancelar, al perder el foco o al cerrar el diálogo.
+- **AltGr**: en distribuciones con AltGr (español, inglés internacional) Windows convierte
+  Ctrl+Alt en AltGr y el navegador entrega `AltGraph` con `ctrlKey`/`altKey` en falso. El grabador
+  lo cuenta como Ctrl+Alt, que es lo que recibe el atajo global.
 - **Capturas**: se pegan con el evento `paste` del WebView y viajan por IPC en base64. Se sirven
   al tablero por `asset://`, con el permiso limitado en tiempo de ejecución a la carpeta de datos.
 - **MCP embebido**: mientras la app está abierta, `rm-mcp` escucha por HTTP en

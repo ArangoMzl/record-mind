@@ -121,9 +121,14 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 
 ### Atajos
 
+Los dos atajos globales se cambian en **Ajustes** (abajo a la izquierda en el tablero): haz clic
+en el atajo y pulsa la nueva combinación. Si Windows u otra app ya la usa, te avisa y se queda el
+anterior. Se guardan en `~/.record-mind/settings.json`.
+
 | Atajo | Dónde | Acción |
 |---|---|---|
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Espacio</kbd> | Cualquier app | Abre la captura rápida |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Espacio</kbd> | Cualquier app | Abre la captura rápida (se cambia en **Ajustes**) |
+| Sin atajo por defecto | Cualquier app | Recorta la pantalla directamente (se asigna en **Ajustes**) |
 | <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> | Captura | Guardar / salto de línea |
 | <kbd>Esc</kbd> | Captura, detalle | Cerrar |
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> | Tablero | Buscar |
@@ -180,8 +185,8 @@ docs/                    documentación
 - [x] **Fase 0**: núcleo, servidor MCP, CLI y skill.
 - [x] **Fase 1**: app de escritorio con captura rápida, tablero en vivo, cola para `/pendientes`,
   bloqueo mientras Claude trabaja, inicio con Windows.
-- [ ] **Fase 2**: ~~anotar capturas (flechas, recuadros)~~ ✓, ~~recorte de pantalla nativo~~ ✓,
-  atajo configurable.
+- [x] **Fase 2**: anotar capturas (flechas, recuadros, lápiz, números), recorte de pantalla
+  nativo, atajos configurables.
 - [ ] **Fase 3**: grafo tareas ↔ memorias ↔ sesiones, detección de errores repetidos con reglas
   sugeridas para `CLAUDE.md`, «Resolver con Claude» desde el tablero, notas de voz.
 
