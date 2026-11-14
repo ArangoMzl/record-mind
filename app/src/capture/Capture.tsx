@@ -1,4 +1,4 @@
-import { Check, Flame, ImagePlus, LayoutGrid, PenLine, Scissors, X } from "lucide-react";
+import { Check, Flame, ImagePlus, LayoutGrid, Mic, PenLine, Scissors, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, onCaptureOpen, type CaptureContext } from "../lib/api";
@@ -102,6 +102,16 @@ export function Capture() {
   }, [addFiles, editing]);
 
   const close = () => api.hideCapture();
+
+  // Dictado de Windows: pone el cursor al final de la nota y pulsa Win+H por ti.
+  const dictate = () => {
+    const el = noteRef.current;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+    api.startDictation().catch((e) => setError(String(e)));
+  };
 
   // El editor necesita espacio: la ventana crece mientras está abierto y vuelve a su tamaño al cerrarlo.
   const openEditor = (id: number) => {
@@ -314,6 +324,13 @@ export function Capture() {
               </button>
             ))}
           </div>
+          <button
+            onClick={dictate}
+            title="Dictar la nota con el dictado de Windows (Win+H). Para parar, pulsa el micrófono del panel o ciérralo."
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-[11.5px] text-ink-2 transition hover:border-accent/50 hover:text-ink"
+          >
+            <Mic size={13} className="text-accent" /> Dictar
+          </button>
           <span className="ml-1 text-[11px] text-ink-3">
             <span className="kbd">⇧ Enter</span> salto · <span className="kbd">Esc</span> cerrar
           </span>

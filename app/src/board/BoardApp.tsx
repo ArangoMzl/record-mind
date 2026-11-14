@@ -28,6 +28,7 @@ import { EditDialog } from "./EditDialog";
 import { Sidebar } from "./Sidebar";
 import { TaskContextMenu, type TaskAction } from "./TaskMenu";
 import { SettingsDialog } from "./SettingsDialog";
+import { RulesDialog } from "./RulesDialog";
 import { Toasts, type Toast } from "./Toasts";
 
 export function BoardApp() {
@@ -35,6 +36,9 @@ export function BoardApp() {
   const [error, setError] = useState<string | null>(null);
   const [project, setProject] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  // Reglas ya vistas, para avisar solo de las que Claude acaba de sugerir.
+  const seenRules = useRef<Set<number> | null>(null);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [dragging, setDragging] = useState<TaskCard | null>(null);
@@ -72,6 +76,12 @@ export function BoardApp() {
         }
       }
       prev.current = new Map(b.tasks.map((t) => [t.id, t]));
+      if (seenRules.current) {
+        for (const r of b.rules) {
+          if (!seenRules.current.has(r.id)) pushToast({ tone: "review", title: `Claude sugiere una regla para ${r.project}`, body: r.rule });
+        }
+      }
+      seenRules.current = new Set(b.rules.map((r) => r.id));
       setBoard(b);
       setError(null);
     } catch (e) {
@@ -240,7 +250,7 @@ export function BoardApp() {
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
-      <Sidebar board={board} project={project} onProject={setProject} onSettings={() => setSettingsOpen(true)} />
+      <Sidebar board={board} project={project} onProject={setProject} onSettings={() => setSettingsOpen(true)} onRules={() => setRulesOpen(true)} />
 
       <div className="flex min-h-0 flex-col">
         <header className="flex items-center gap-3 border-b border-line px-6 py-3.5">
@@ -356,6 +366,28 @@ export function BoardApp() {
 
       <AnimatePresence>
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} onChanged={refresh} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {rulesOpen && (
+          <RulesDialog
+            rules={board?.rules ?? []}
+            tasks={board?.tasks ?? []}
+            onClose={() => setRulesOpen(false)}
+            onOpenTask={(id) => {
+              setRulesOpen(false);
+              setOpenId(id);
+            }}
+            onDecided={(d, accepted) => {
+              pushToast(
+                accepted
+                  ? { tone: "review", title: d.added ? "Regla añadida a CLAUDE.md" : "La regla ya estaba en CLAUDE.md", body: d.path ?? d.rule.rule }
+                  : { tone: "inbox", title: "Regla descartada", body: d.rule.rule },
+              );
+              refresh();
+            }}
+          />
+        )}
       </AnimatePresence>
 
       <Toasts toasts={toasts} />

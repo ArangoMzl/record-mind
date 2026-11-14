@@ -1,4 +1,4 @@
-import { Brain, LayoutGrid, Plug, Settings } from "lucide-react";
+import { Brain, LayoutGrid, Lightbulb, Plug, Settings } from "lucide-react";
 import { shortcutLabel, timeAgo, type Board } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
 
@@ -7,12 +7,15 @@ export function Sidebar({
   project,
   onProject,
   onSettings,
+  onRules,
 }: {
   board: Board | null;
   project: string | null;
   onProject: (p: string | null) => void;
   onSettings: () => void;
+  onRules: () => void;
 }) {
+  const pendingRules = board?.rules.length ?? 0;
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
   // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
   const live: { project: string; directory: string; last_activity: string; count: number }[] = [];
@@ -61,6 +64,18 @@ export function Sidebar({
         <NavItem active={project === null} onClick={() => onProject(null)} count={total}>
           <LayoutGrid size={15} /> Todos los proyectos
         </NavItem>
+        <button
+          onClick={onRules}
+          className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-white/[0.04] ${
+            pendingRules ? "text-ink" : "text-ink-3 hover:text-ink-2"
+          }`}
+          title="Reglas para CLAUDE.md que Claude sugirió a partir de errores repetidos"
+        >
+          <Lightbulb size={15} className={pendingRules ? "text-accent" : ""} /> Reglas sugeridas
+          {pendingRules > 0 && (
+            <span className="ml-auto rounded-full bg-accent px-1.5 font-mono text-[10.5px] font-semibold text-white">{pendingRules}</span>
+          )}
+        </button>
       </nav>
 
       <div className="eyebrow px-5 pt-5 pb-2">Proyectos</div>

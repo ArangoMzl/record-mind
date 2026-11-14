@@ -2,6 +2,7 @@
 //! icono en la bandeja y servidor MCP embebido para Claude Code.
 
 mod commands;
+mod dictation;
 mod shortcuts;
 mod snip;
 mod watcher;
@@ -153,6 +154,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::board,
             commands::live_sessions,
+            commands::decide_rule,
+            commands::start_dictation,
             commands::get_shortcuts,
             commands::set_shortcut,
             commands::pause_shortcuts,

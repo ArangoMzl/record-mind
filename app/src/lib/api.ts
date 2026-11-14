@@ -58,6 +58,8 @@ export interface Board {
   tasks: TaskCard[];
   /** Con tareas primero; después los proyectos de Claude Code sin tareas (contadores a cero). */
   projects: { name: string; counts: [number, number, number, number]; directory: string | null }[];
+  /** Reglas para CLAUDE.md que Claude sugirió y esperan tu decisión. */
+  rules: RuleSuggestion[];
   /** Conversaciones de Claude Code con actividad reciente, la más reciente primero. */
   sessions: SessionInfo[];
   mcp_url: string | null;
@@ -130,6 +132,26 @@ export interface SnipRect {
   height: number;
 }
 
+export interface RuleSuggestion {
+  id: number;
+  project: string;
+  rule: string;
+  /** Qué error se repite y dónde se vio. */
+  reason: string;
+  task_ids: number[];
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface RuleDecision {
+  rule: RuleSuggestion;
+  /** CLAUDE.md donde quedó escrita (al aceptar). */
+  path: string | null;
+  /** false si ya estaba en el archivo. */
+  added: boolean;
+}
+
 export type ShortcutAction = "capture" | "snip";
 
 export interface ShortcutsView {
@@ -160,6 +182,10 @@ export const api = {
   duplicate: (id: number) => invoke<Task>("duplicate_task", { id }),
   remove: (id: number) => invoke<void>("delete_task", { id }),
   hideCapture: () => invoke<void>("hide_capture"),
+  /** Aceptar escribe la regla (quizá retocada) en el CLAUDE.md del proyecto; descartar solo la marca. */
+  decideRule: (id: number, accept: boolean, rule?: string) => invoke<RuleDecision>("decide_rule", { id, accept, rule: rule ?? null }),
+  /** Abre el dictado de Windows (Win+H) sobre el campo con el foco. */
+  startDictation: () => invoke<void>("start_dictation"),
   getShortcuts: () => invoke<ShortcutsView>("get_shortcuts"),
   /** null quita el atajo (solo el de recortar). Falla con un mensaje legible si no se puede usar. */
   setShortcut: (action: ShortcutAction, shortcut: string | null) => invoke<ShortcutsView>("set_shortcut", { action, shortcut }),

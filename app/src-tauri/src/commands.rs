@@ -2,7 +2,8 @@
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use rm_core::{
-    Memory, MemoryRelation, NewTask, ProjectSummary, SessionInfo, Status, Task, TaskDetail, TaskEdit, TaskFilter, claude_code,
+    Memory, MemoryRelation, NewTask, ProjectSummary, RuleSuggestion, SessionInfo, Status, Task, TaskDetail, TaskEdit,
+    TaskFilter, claude_code, rules,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -78,6 +79,8 @@ pub struct Board {
     pub tasks: Vec<TaskCard>,
     /// Proyectos con tareas y los que conoce Claude Code (estos con contadores a cero).
     pub projects: Vec<ProjectSummary>,
+    /// Reglas para CLAUDE.md que Claude sugirió y esperan tu decisión.
+    pub rules: Vec<RuleSuggestion>,
     /// Conversaciones de Claude Code con actividad reciente, la más reciente primero.
     pub sessions: Vec<SessionInfo>,
     pub mcp_url: Option<String>,
@@ -96,12 +99,20 @@ pub fn board(app: AppHandle, state: State<AppState>) -> Res<Board> {
         cards.push(card(d));
     }
     let with_tasks = store.projects().map_err(err)?;
+    let rules = store
+        .rule_suggestions(None)
+        .map_err(err)?
+        .into_iter()
+        .filter(|r| r.status == "pending")
+        .collect();
     drop(store);
     let mut engram = state.engram();
-    let projects = claude_code::merge_projects(with_tasks, &claude_code::known_projects(&mut engram));
+    let known = claude_code::known_projects(&mut engram);
+    let projects = claude_code::merge_projects(with_tasks, &known);
     Ok(Board {
         tasks: cards,
         projects,
+        rules,
         sessions: claude_code::live_sessions(&mut engram),
         mcp_url: state.mcp_url.lock().unwrap().clone(),
         engram: engram.available(),
@@ -123,6 +134,40 @@ pub fn set_shortcut(app: AppHandle, action: shortcuts::Action, shortcut: Option<
 #[tauri::command]
 pub fn pause_shortcuts(app: AppHandle, paused: bool) {
     shortcuts::pause(&app, paused);
+}
+
+#[derive(Serialize)]
+pub struct RuleDecision {
+    pub rule: RuleSuggestion,
+    /// CLAUDE.md donde quedó escrita (solo al aceptar).
+    pub path: Option<String>,
+    /// false si la regla ya estaba en el archivo.
+    pub added: bool,
+}
+
+/// Aceptar escribe la regla en el CLAUDE.md del proyecto **antes** de marcarla: si no se puede
+/// escribir, la sugerencia sigue pendiente. Descartar solo la marca.
+#[tauri::command]
+pub fn decide_rule(state: State<AppState>, id: i64, accept: bool, rule: Option<String>) -> Res<RuleDecision> {
+    if !accept {
+        let rule = state.store().decide_rule(id, false, None).map_err(err)?;
+        return Ok(RuleDecision { rule, path: None, added: false });
+    }
+    let current = state.store().rule(id).map_err(err)?;
+    let text = rule.as_deref().map(str::trim).filter(|r| !r.is_empty()).unwrap_or(&current.rule).to_string();
+    let dir = claude_code::known_projects(&mut state.engram())
+        .into_iter()
+        .find(|p| p.name == current.project)
+        .map(|p| p.directory)
+        .ok_or_else(|| {
+            format!(
+                "No sé en qué carpeta está «{}». Abre Claude Code en esa carpeta una vez y vuelve a intentarlo.",
+                current.project
+            )
+        })?;
+    let (path, added) = rules::add_rule_to_claude_md(std::path::Path::new(&dir), &text).map_err(err)?;
+    let rule = state.store().decide_rule(id, true, Some(&text)).map_err(err)?;
+    Ok(RuleDecision { rule, path: Some(path.to_string_lossy().into_owned()), added })
 }
 
 /// Solo las sesiones activas: el tablero las consulta cada poco sin recargar todas las tareas,
@@ -392,4 +437,11 @@ pub fn open_board(app: AppHandle) {
 #[tauri::command]
 pub async fn open_capture(app: AppHandle) {
     crate::show_capture(&app);
+}
+
+/// Abre el dictado de Windows (Win+H). Espera un instante para que el foco ya esté en la nota.
+#[tauri::command]
+pub async fn start_dictation() -> Res<()> {
+    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+    crate::dictation::open()
 }
