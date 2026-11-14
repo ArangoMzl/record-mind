@@ -197,31 +197,13 @@ fn normalize_dir(dir: &str) -> String {
     dir.trim().replace('/', "\\").trim_end_matches('\\').to_lowercase()
 }
 
-const STOPWORDS: &[&str] = &[
-    "para", "esta", "este", "esto", "estos", "estas", "como", "pero", "tiene", "hace", "hacer", "falta",
-    "toca", "porque", "cuando", "donde", "desde", "hasta", "sobre", "entre", "todo", "toda", "todos",
-    "algo", "también", "tambien", "solo", "sólo", "debe", "deben", "puede", "pueden", "quiero", "queda",
-    "that", "this", "with", "from", "have", "should", "does", "into", "when", "what",
-];
-
-/// Convierte un texto libre en una consulta FTS5 `"a" OR "b"` con las palabras útiles.
-/// El índice de Engram usa trigramas, así que se descartan palabras de menos de 4 letras.
+/// Convierte un texto libre en una consulta FTS5 `"a" OR "b"` con las palabras útiles (máximo 10).
 fn fts_query(text: &str) -> Option<String> {
-    let mut words: Vec<String> = Vec::new();
-    for w in text.split(|c: char| !c.is_alphanumeric() && c != '_' && c != '-') {
-        let w = w.trim_matches('-').to_lowercase();
-        if w.chars().count() < 4 || STOPWORDS.contains(&w.as_str()) || words.contains(&w) {
-            continue;
-        }
-        words.push(w);
-        if words.len() == 10 {
-            break;
-        }
-    }
+    let words = crate::text::keywords(text);
     if words.is_empty() {
         None
     } else {
-        Some(words.iter().map(|w| format!("\"{w}\"")).collect::<Vec<_>>().join(" OR "))
+        Some(words.iter().take(10).map(|w| format!("\"{w}\"")).collect::<Vec<_>>().join(" OR "))
     }
 }
 

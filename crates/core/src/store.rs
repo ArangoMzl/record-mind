@@ -59,6 +59,20 @@ CREATE TABLE task_memories (
     r#"
 ALTER TABLE tasks ADD COLUMN queued_at TEXT;
 "#,
+    // 3: reglas para CLAUDE.md que Claude sugiere a partir de errores repetidos (ver rules.rs).
+    r#"
+CREATE TABLE rule_suggestions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project    TEXT    NOT NULL,
+    rule       TEXT    NOT NULL,
+    reason     TEXT    NOT NULL DEFAULT '',
+    task_ids   TEXT    NOT NULL DEFAULT '[]',
+    status     TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','rejected')),
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    decided_at TEXT
+);
+CREATE INDEX rule_suggestions_project ON rule_suggestions(project, status);
+"#,
 ];
 
 /// Cambios a mano sobre una tarea. `None` = no tocar ese campo.
@@ -81,7 +95,7 @@ pub struct TaskFilter {
 
 /// Base de tareas de record-mind (lectura y escritura).
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
     root: PathBuf,
 }
 
@@ -567,10 +581,10 @@ impl Store {
     }
 }
 
-const TASK_SELECT: &str = "SELECT id, project, title, note, status, priority, session_id, resolution,
+pub(crate) const TASK_SELECT: &str = "SELECT id, project, title, note, status, priority, session_id, resolution,
     files_changed, created_at, updated_at, queued_at IS NOT NULL FROM tasks";
 
-fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
+pub(crate) fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     let status: String = r.get(4)?;
     let files: String = r.get(8)?;
     Ok(Task {
