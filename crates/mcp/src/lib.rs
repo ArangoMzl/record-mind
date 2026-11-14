@@ -25,13 +25,14 @@ const INSTRUCTIONS: &str = "record-mind es el tablero de micro-pendientes del us
 (textos, estilos, imágenes que no cargan, detalles que faltan) capturadas con nota y captura de pantalla. \
 Flujo: list_tasks (pasa tu cwd) → get_task (incluye capturas y memorias de Engram relacionadas) → claim_task → \
 resuelve y verifica → complete_task con un resumen honesto. Nunca marques una tarea como hecha: \
-complete_task la deja «Para revisar» y la persona la aprueba o la devuelve con una nota.";
+complete_task la deja «Para revisar» y la persona la aprueba o la devuelve con una nota. \
+Al terminar una pasada, find_patterns muestra errores que se repiten; si hay uno claro, propón una regla para \
+CLAUDE.md con suggest_rule (el usuario la aprueba en el tablero; nunca edites CLAUDE.md por tu cuenta).";
 
 #[derive(Clone)]
 pub struct RecordMind {
     store: Arc<Mutex<Store>>,
     engram: Arc<Mutex<EngramReader>>,
-    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -113,6 +114,19 @@ pub struct CreateArgs {
     pub priority: Option<i64>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SuggestRuleArgs {
+    #[serde(flatten)]
+    pub scope: ScopeArgs,
+    /// La regla para CLAUDE.md: una frase imperativa, concreta y comprobable
+    /// (p. ej. «Comprueba los tamaños de letra también en el breakpoint móvil»).
+    pub rule: String,
+    /// Qué error se repite y dónde se vio, en 1–2 frases. El usuario lo lee para decidir.
+    pub reason: String,
+    /// Tareas que lo demuestran (números).
+    pub task_ids: Option<Vec<i64>>,
+}
+
 // ── Herramientas ────────────────────────────────────────────────────────
 
 #[tool_router]
@@ -123,7 +137,11 @@ impl RecordMind {
 
     /// Comparte la base con otro dueño (la app de escritorio embebe el servidor así).
     pub fn shared(store: Arc<Mutex<Store>>, engram: EngramReader) -> Self {
-        RecordMind { store, engram: Arc::new(Mutex::new(engram)), tool_router: Self::tool_router() }
+        RecordMind {
+            store,
+            engram: Arc::new(Mutex::new(engram)),
+            tool_router: Self::tool_router() + Self::rules_router(),
+        }
     }
 
     pub fn open_default() -> anyhow::Result<Self> {
@@ -272,7 +290,76 @@ impl RecordMind {
     }
 }
 
-#[tool_handler]
+#[tool_router(router = rules_router)]
+impl RecordMind {
+    #[tool(description = "Evidencia de errores que se repiten en un proyecto: tareas que el usuario devolvió (con sus \
+        notas), temas que aparecen en varias tareas y reglas ya sugeridas. Úsalo al terminar una pasada de \
+        /pendientes para decidir si vale la pena sugerir una regla para CLAUDE.md.")]
+    async fn find_patterns(&self, Parameters(scope): Parameters<ScopeArgs>) -> Result<CallToolResult, McpError> {
+        let Some(project) = self.project_for(&scope) else {
+            return Ok(fail("indica cwd o project"));
+        };
+        let p = match self.store().patterns(&project) {
+            Ok(p) => p,
+            Err(e) => return Ok(fail(e)),
+        };
+        let mut out = String::new();
+        let _ = writeln!(out, "# Patrones en {} ({} tareas)", p.project, p.total_tasks);
+        out.push_str("\n## Tareas devueltas por el usuario (la señal más fuerte)\n");
+        if p.returned.is_empty() {
+            out.push_str("Ninguna.\n");
+        }
+        for t in &p.returned {
+            let _ = writeln!(out, "- #{} [{}] {} — nota: {}", t.id, t.status.as_str(), t.title, t.note.replace('\n', " "));
+            for n in &t.return_notes {
+                let _ = writeln!(out, "  · devuelta: {n}");
+            }
+        }
+        out.push_str("\n## Palabras que se repiten en varias tareas\n");
+        if p.themes.is_empty() {
+            out.push_str("Ninguna.\n");
+        }
+        for th in &p.themes {
+            let ids: Vec<String> = th.task_ids.iter().map(|i| format!("#{i}")).collect();
+            let _ = writeln!(out, "- «{}» en {}", th.word, ids.join(", "));
+        }
+        out.push_str("\n## Reglas ya sugeridas o aceptadas (no las repitas)\n");
+        if p.existing.is_empty() {
+            out.push_str("Ninguna.\n");
+        }
+        for r in &p.existing {
+            let _ = writeln!(out, "- [{}] {}", r.status, r.rule);
+        }
+        out.push_str(
+            "\nSugiere una regla con suggest_rule solo si hay un error que de verdad se repite: la misma causa en \
+             2 o más tareas, o una devolución que deja clara una convención del proyecto. Una palabra repetida no \
+             basta por sí sola: confirma con las notas (get_task). Máximo 2 reglas por pasada. Nunca edites \
+             CLAUDE.md tú: el usuario la aprueba en el tablero y la app la escribe.",
+        );
+        Ok(ok(out))
+    }
+
+    #[tool(description = "Sugiere una regla para el CLAUDE.md del proyecto a partir de un error que se repite. Queda \
+        pendiente en el tablero; el usuario la acepta (y la app la escribe en CLAUDE.md) o la descarta.")]
+    async fn suggest_rule(&self, Parameters(a): Parameters<SuggestRuleArgs>) -> Result<CallToolResult, McpError> {
+        let Some(project) = self.project_for(&a.scope) else {
+            return Ok(fail("indica cwd o project"));
+        };
+        let ids = a.task_ids.unwrap_or_default();
+        Ok(match self.store().suggest_rule(&project, &a.rule, &a.reason, &ids) {
+            Ok(r) => ok(format!(
+                "Regla sugerida para {} (sugerencia {}). El usuario la verá en «Reglas sugeridas» del tablero; \
+                 no la escribas en CLAUDE.md.",
+                r.project, r.id
+            )),
+            Err(e) => fail(e),
+        })
+    }
+}
+
+// El router del campo: une las herramientas de tareas y las de reglas (por defecto el macro
+// usaría `Self::tool_router()`, que solo tiene las de tareas).
+#[tool_handler(router = self.tool_router)]
 impl ServerHandler for RecordMind {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
