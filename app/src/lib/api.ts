@@ -50,12 +50,16 @@ export interface SessionInfo {
   project: string;
   directory: string;
   started_at: string;
+  /** Última actividad de la conversación (UTC). */
+  last_activity: string;
 }
 
 export interface Board {
   tasks: TaskCard[];
-  projects: { name: string; counts: [number, number, number, number] }[];
-  active: SessionInfo | null;
+  /** Con tareas primero; después los proyectos de Claude Code sin tareas (contadores a cero). */
+  projects: { name: string; counts: [number, number, number, number]; directory: string | null }[];
+  /** Conversaciones de Claude Code con actividad reciente, la más reciente primero. */
+  sessions: SessionInfo[];
   mcp_url: string | null;
   engram: boolean;
   shortcut: string;
@@ -90,7 +94,7 @@ export interface TaskDetail extends Task {
 }
 
 export interface CaptureContext {
-  active: SessionInfo | null;
+  sessions: SessionInfo[];
   projects: string[];
 }
 
@@ -113,8 +117,23 @@ export interface ImageInput {
   ext: string;
 }
 
+export interface SnipSource {
+  path: string;
+  width: number;
+  height: number;
+}
+
+export interface SnipRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const api = {
   board: () => invoke<Board>("board"),
+  /** Conversaciones de Claude Code con actividad reciente (consulta ligera). */
+  sessions: () => invoke<SessionInfo[]>("live_sessions"),
   detail: (id: number) => invoke<TaskDetail>("task_detail", { id }),
   captureContext: () => invoke<CaptureContext>("capture_context"),
   create: (input: { project: string; note: string; title?: string; priority: number; images: ImageInput[] }) =>
@@ -130,6 +149,16 @@ export const api = {
   duplicate: (id: number) => invoke<Task>("duplicate_task", { id }),
   remove: (id: number) => invoke<void>("delete_task", { id }),
   hideCapture: () => invoke<void>("hide_capture"),
+  /** Congela el monitor del ratón y abre la ventana de recorte. */
+  startSnip: () => invoke<void>("start_snip"),
+  snipSource: () => invoke<SnipSource | null>("snip_source"),
+  snipReady: () => invoke<void>("snip_ready"),
+  /** Con un área (píxeles físicos) la añade a la captura; con null cancela. */
+  finishSnip: (rect: SnipRect | null) => invoke<void>("finish_snip", { rect }),
+  /** Recortes listos que aún no se añadieron a la captura. */
+  takeSnips: () => invoke<ImageInput[]>("take_snips"),
+  /** Agranda (true) o devuelve a su tamaño (false) la ventana de captura. */
+  resizeCapture: (editing: boolean) => invoke<void>("resize_capture", { editing }),
   openBoard: () => invoke<void>("open_board"),
   openCapture: () => invoke<void>("open_capture"),
 };

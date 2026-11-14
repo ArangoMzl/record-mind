@@ -2,6 +2,7 @@
 //! icono en la bandeja y servidor MCP embebido para Claude Code.
 
 mod commands;
+mod snip;
 mod watcher;
 
 use std::{
@@ -11,7 +12,8 @@ use std::{
 
 use rm_core::{EngramReader, Store};
 use tauri::{
-    AppHandle, Emitter, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, RunEvent, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent,
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
@@ -27,6 +29,7 @@ pub struct AppState {
     pub store: Arc<Mutex<Store>>,
     pub engram: Mutex<EngramReader>,
     pub mcp_url: Mutex<Option<String>>,
+    pub snip: Mutex<snip::SnipState>,
 }
 
 impl AppState {
@@ -64,6 +67,34 @@ pub fn show_capture(app: &AppHandle) {
     let _ = w.set_focus();
     // Si la ventana se acaba de crear nadie escucha todavía; la vista carga su contexto al montarse.
     let _ = app.emit_to("capture", "capture:open", ());
+}
+
+/// Tamaño de la ventana de captura: el de tauri.conf.json normalmente y uno grande, sin pasarse
+/// del monitor, mientras se anota una imagen.
+pub fn resize_capture(w: &WebviewWindow, editing: bool) {
+    let (width, height) = if editing {
+        let (mw, mh) = w
+            .current_monitor()
+            .ok()
+            .flatten()
+            .map(|m| {
+                let size = m.size().to_logical::<f64>(m.scale_factor());
+                (size.width, size.height)
+            })
+            .unwrap_or((1366.0, 768.0));
+        ((mw * 0.92).min(1240.0), (mh * 0.88).min(860.0))
+    } else {
+        w.app_handle()
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|c| c.label == "capture")
+            .map(|c| (c.width, c.height))
+            .unwrap_or((640.0, 430.0))
+    };
+    let _ = w.set_size(LogicalSize::new(width, height));
+    let _ = w.center();
 }
 
 fn create_capture(app: &AppHandle) -> tauri::Result<WebviewWindow> {
@@ -106,9 +137,11 @@ pub fn run() {
             store: store.clone(),
             engram: Mutex::new(EngramReader::open_default()),
             mcp_url: Mutex::new(None),
+            snip: Mutex::default(),
         })
         .invoke_handler(tauri::generate_handler![
             commands::board,
+            commands::live_sessions,
             commands::task_detail,
             commands::capture_context,
             commands::create_task,
@@ -123,6 +156,12 @@ pub fn run() {
             commands::duplicate_task,
             commands::delete_task,
             commands::hide_capture,
+            commands::resize_capture,
+            commands::start_snip,
+            commands::snip_source,
+            commands::snip_ready,
+            commands::finish_snip,
+            commands::take_snips,
             commands::open_board,
             commands::open_capture,
         ])
@@ -177,7 +216,12 @@ pub fn run() {
             // Cerrar el tablero lo esconde en la bandeja; la captura siempre se oculta.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                if window.label() == snip::LABEL {
+                    // Alt+F4 durante un recorte: se cancela como con Esc.
+                    let _ = snip::finish(window.app_handle(), None);
+                } else {
+                    let _ = window.hide();
+                }
             }
         })
         .build(tauri::generate_context!())
@@ -195,6 +239,7 @@ pub fn run() {
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Abrir tablero", true, None::<&str>)?;
     let capture = MenuItem::with_id(app, "capture", "Capturar pendiente   Ctrl+Shift+Espacio", true, None::<&str>)?;
+    let snip = MenuItem::with_id(app, "snip", "Recortar pantalla", true, None::<&str>)?;
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart = CheckMenuItem::with_id(app, "autostart", "Iniciar con Windows", true, autostart_on, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
@@ -203,6 +248,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         &[
             &open,
             &capture,
+            &snip,
             &PredefinedMenuItem::separator(app)?,
             &autostart,
             &PredefinedMenuItem::separator(app)?,
@@ -218,6 +264,12 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "open" => show_board(app),
             "capture" => show_capture(app),
+            "snip" => {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = snip::start(app).await;
+                });
+            }
             "autostart" => {
                 let launcher = app.autolaunch();
                 let was_on = launcher.is_enabled().unwrap_or(false);

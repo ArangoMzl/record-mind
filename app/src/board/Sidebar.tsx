@@ -1,5 +1,5 @@
 import { Brain, LayoutGrid, Plug } from "lucide-react";
-import type { Board } from "../lib/api";
+import { timeAgo, type Board } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
 
 export function Sidebar({
@@ -12,7 +12,13 @@ export function Sidebar({
   onProject: (p: string | null) => void;
 }) {
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
-  const active = board?.active;
+  // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
+  const live: { project: string; directory: string; last_activity: string; count: number }[] = [];
+  for (const s of board?.sessions ?? []) {
+    const row = live.find((x) => x.project === s.project);
+    if (row) row.count += 1;
+    else live.push({ project: s.project, directory: s.directory, last_activity: s.last_activity, count: 1 });
+  }
 
   return (
     <aside className="flex min-h-0 flex-col border-r border-line bg-base/70 backdrop-blur-xl">
@@ -23,17 +29,29 @@ export function Sidebar({
         </b>
       </div>
 
-      {active && (
-        <button
-          onClick={() => onProject(active.project)}
-          className="mx-3 mb-2 rounded-xl border border-accent/25 bg-accent-soft px-3 py-2.5 text-left transition hover:border-accent/45"
-          title={active.directory}
-        >
-          <div className="flex items-center gap-2 text-[10.5px] font-medium tracking-wider text-accent uppercase">
-            <span className="size-1.5 animate-pulse-dot rounded-full bg-accent" /> Sesión activa
+      {live.length > 0 && (
+        <div className="mx-3 mb-2 rounded-xl border border-accent/25 bg-accent-soft px-1.5 pt-2.5 pb-1.5">
+          <div className="flex items-center gap-2 px-1.5 text-[10.5px] font-medium tracking-wider text-accent uppercase">
+            <span className="size-1.5 animate-pulse-dot rounded-full bg-accent" />
+            {live.length === 1 ? "Sesión activa" : "Sesiones activas"}
           </div>
-          <div className="mt-0.5 truncate text-[13px] font-medium">{active.project}</div>
-        </button>
+          <div className="mt-1 flex flex-col">
+            {live.map((s) => (
+              <button
+                key={s.project}
+                onClick={() => onProject(s.project)}
+                title={`${s.directory}${s.count > 1 ? ` · ${s.count} conversaciones` : ""}`}
+                className={`flex items-baseline gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-white/[0.06] ${
+                  project === s.project ? "bg-white/[0.06]" : ""
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.project}</span>
+                {s.count > 1 && <span className="font-mono text-[10.5px] text-ink-3">×{s.count}</span>}
+                <span className="shrink-0 text-[10.5px] text-ink-3">{timeAgo(s.last_activity)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="eyebrow px-5 pt-3 pb-2">Explorar</div>
@@ -47,13 +65,24 @@ export function Sidebar({
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
         {board?.projects.map((p) => {
           const open = p.counts[0] + p.counts[1] + p.counts[2];
+          // Los proyectos de Claude Code que aún no tienen tareas se ven apagados.
+          const empty = p.counts.every((c) => c === 0);
           return (
-            <NavItem key={p.name} active={project === p.name} onClick={() => onProject(p.name)} count={open}>
+            <NavItem
+              key={p.name}
+              active={project === p.name}
+              onClick={() => onProject(p.name)}
+              count={open}
+              muted={empty}
+              title={p.directory ?? undefined}
+            >
               <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{
-                  background: p.counts[1] ? "var(--color-st-progress)" : p.counts[2] ? "var(--color-st-review)" : "var(--color-ink-3)",
-                }}
+                className={`size-1.5 shrink-0 rounded-full ${empty ? "border border-ink-3" : ""}`}
+                style={
+                  empty
+                    ? undefined
+                    : { background: p.counts[1] ? "var(--color-st-progress)" : p.counts[2] ? "var(--color-st-review)" : "var(--color-ink-3)" }
+                }
               />
               <span className="truncate">{p.name}</span>
             </NavItem>
@@ -70,12 +99,24 @@ export function Sidebar({
   );
 }
 
-function NavItem(props: { active: boolean; onClick: () => void; count: number; children: React.ReactNode }) {
+function NavItem(props: {
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  muted?: boolean;
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={props.onClick}
+      title={props.title}
       className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
-        props.active ? "bg-white/[0.07] text-ink" : "text-ink-2 hover:bg-white/[0.04] hover:text-ink"
+        props.active
+          ? "bg-white/[0.07] text-ink"
+          : props.muted
+            ? "text-ink-3 hover:bg-white/[0.04] hover:text-ink-2"
+            : "text-ink-2 hover:bg-white/[0.04] hover:text-ink"
       }`}
     >
       {props.children}

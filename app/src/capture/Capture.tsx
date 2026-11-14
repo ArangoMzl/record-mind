@@ -1,14 +1,21 @@
-import { Check, ChevronDown, Flame, ImagePlus, LayoutGrid, X } from "lucide-react";
+import { Check, Flame, ImagePlus, LayoutGrid, PenLine, Scissors, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, onCaptureOpen, type CaptureContext } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
+import { ProjectPicker } from "../lib/ProjectPicker";
+import { Annotator } from "./Annotator";
+import type { Shape } from "./annotate";
 
 interface Shot {
   id: number;
+  /** Lo que se ve y se guarda: la imagen original o, si se anotó, el PNG con las anotaciones. */
   url: string;
   data: string;
   ext: string;
+  /** La imagen tal como llegó, para poder volver a anotar sin pintar encima. */
+  original: { url: string; data: string; ext: string };
+  shapes: Shape[];
 }
 
 const PRIORITIES = [
@@ -29,14 +36,23 @@ export function Capture() {
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [customProject, setCustomProject] = useState(false);
+  /** Captura que se está anotando (su id), o null. */
+  const [editing, setEditing] = useState<number | null>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
-    const c = await api.captureContext();
+    const [c, snips] = await Promise.all([api.captureContext(), api.takeSnips()]);
     setCtx(c);
     // Proyecto por defecto: la sesión activa de Claude Code, si no hay uno elegido.
-    setProject((p) => p || c.active?.project || c.projects[0] || "");
+    setProject((p) => p || c.sessions[0]?.project || c.projects[0] || "");
+    // Los recortes de pantalla llegan como PNG en base64 y entran como cualquier captura pegada.
+    if (snips.length) {
+      const fresh = snips.map(({ data, ext }): Shot => {
+        const original = { url: `data:image/${ext};base64,${data}`, data, ext };
+        return { id: Math.random(), ...original, original, shapes: [] };
+      });
+      setShots((s) => [...s, ...fresh].slice(0, 6));
+    }
     setTimeout(() => noteRef.current?.focus(), 30);
   }, []);
 
@@ -61,7 +77,8 @@ export function Capture() {
             const r = new FileReader();
             r.onload = () => {
               const url = String(r.result);
-              resolve({ id: Math.random(), url, data: url.slice(url.indexOf(",") + 1), ext: EXT[f.type] });
+              const original = { url, data: url.slice(url.indexOf(",") + 1), ext: EXT[f.type] };
+              resolve({ id: Math.random(), ...original, original, shapes: [] });
             };
             r.onerror = reject;
             r.readAsDataURL(f);
@@ -73,6 +90,7 @@ export function Capture() {
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      if (editing !== null) return;
       const files = Array.from(e.clipboardData?.files ?? []);
       if (files.some((f) => EXT[f.type])) {
         e.preventDefault();
@@ -81,15 +99,48 @@ export function Capture() {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [addFiles]);
+  }, [addFiles, editing]);
 
   const close = () => api.hideCapture();
+
+  // El editor necesita espacio: la ventana crece mientras está abierto y vuelve a su tamaño al cerrarlo.
+  const openEditor = (id: number) => {
+    setEditing(id);
+    api.resizeCapture(true);
+  };
+
+  const closeEditor = () => {
+    setEditing(null);
+    api.resizeCapture(false);
+    setTimeout(() => noteRef.current?.focus(), 30);
+  };
+
+  const finishEditing = (id: number, shapes: Shape[], out: { url: string; data: string } | null) => {
+    setShots((xs) =>
+      xs.map((s) => (s.id !== id ? s : out ? { ...s, url: out.url, data: out.data, ext: "png", shapes } : { ...s, ...s.original, shapes: [] })),
+    );
+    closeEditor();
+  };
+
+  const editingShot = shots.find((s) => s.id === editing);
+  if (editingShot) {
+    return (
+      <div className="flex h-full p-3">
+        <Annotator
+          key={editingShot.id}
+          src={editingShot.original.url}
+          initial={editingShot.shapes}
+          onCancel={closeEditor}
+          onDone={(shapes, out) => finishEditing(editingShot.id, shapes, out)}
+        />
+      </div>
+    );
+  }
 
   const reset = () => {
     setNote("");
     setShots([]);
     setPriority(0);
-    setCustomProject(false);
   };
 
   const save = async () => {
@@ -126,8 +177,6 @@ export function Capture() {
     }
   };
 
-  const isActive = ctx?.active?.project === project;
-
   return (
     <div className="flex h-full items-center justify-center p-3" onKeyDown={onKey}>
       <motion.div
@@ -144,7 +193,7 @@ export function Capture() {
           setDragOver(false);
           addFiles(Array.from(e.dataTransfer.files));
         }}
-        className="relative flex h-full w-full flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#0e0e11]/[0.97] shadow-[0_24px_70px_rgba(0,0,0,.6),0_0_0_1px_rgba(234,24,137,.12),0_0_40px_rgba(234,24,137,.10)]"
+        className="relative flex h-full w-full flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#0e0e11]/[0.97] shadow-[0_4px_10px_-2px_rgba(0,0,0,.5),0_0_0_1px_rgba(234,24,137,.14)]"
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(420px_120px_at_50%_-20%,rgba(234,24,137,.22),transparent)]" />
 
@@ -155,36 +204,15 @@ export function Capture() {
           </span>
 
           <div className="ml-2 flex items-center">
-            {customProject ? (
-              <input
-                autoFocus
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                onBlur={() => project && setCustomProject(false)}
-                placeholder="nombre-del-proyecto"
-                className="w-44 rounded-lg border border-accent/40 bg-black/40 px-2 py-1 text-[12px] outline-none"
-              />
-            ) : (
-              <label className="relative flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] py-1 pr-6 pl-2 text-[12px] text-ink-2 hover:border-white/20">
-                {isActive && <span className="size-1.5 animate-pulse-dot rounded-full bg-accent" title="Sesión activa de Claude Code" />}
-                <span className="max-w-44 truncate text-ink">{project || "Elige proyecto"}</span>
-                <ChevronDown size={13} className="absolute right-1.5" />
-                <select
-                  value={project}
-                  onChange={(e) => (e.target.value === "__new" ? (setProject(""), setCustomProject(true)) : setProject(e.target.value))}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                >
-                  {ctx?.projects.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                      {ctx.active?.project === p ? "  · sesión activa" : ""}
-                    </option>
-                  ))}
-                  {project && !ctx?.projects.includes(project) && <option value={project}>{project}</option>}
-                  <option value="__new">+ Otro proyecto…</option>
-                </select>
-              </label>
-            )}
+            <ProjectPicker
+              value={project}
+              projects={ctx?.projects ?? []}
+              active={ctx?.sessions.map((s) => s.project)}
+              onChange={(p) => {
+                setProject(p);
+                setTimeout(() => noteRef.current?.focus(), 0);
+              }}
+            />
           </div>
 
           <div className="flex-1" data-tauri-drag-region />
@@ -215,7 +243,19 @@ export function Capture() {
                   exit={{ opacity: 0, scale: 0.8 }}
                   className="group relative h-[72px] w-[112px] overflow-hidden rounded-xl border border-white/10 bg-black/40"
                 >
-                  <img src={s.url} alt="" className="size-full object-cover object-top" />
+                  <button onClick={() => openEditor(s.id)} title="Anotar con flechas y recuadros" className="block size-full">
+                    <img src={s.url} alt="" className="size-full object-cover object-top" />
+                    <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition group-hover:opacity-100">
+                      <span className="flex items-center gap-1 text-[11.5px] font-medium text-white">
+                        <PenLine size={13} /> Anotar
+                      </span>
+                    </span>
+                  </button>
+                  {s.shapes.length > 0 && (
+                    <span className="pointer-events-none absolute bottom-1 left-1 grid size-5 place-items-center rounded-md bg-accent text-white shadow" title="Anotada">
+                      <PenLine size={11} />
+                    </span>
+                  )}
                   <button
                     onClick={() => setShots((xs) => xs.filter((x) => x.id !== s.id))}
                     className="absolute top-1 right-1 rounded-md bg-black/70 p-0.5 text-ink-2 opacity-0 transition group-hover:opacity-100 hover:text-white"
@@ -225,14 +265,30 @@ export function Capture() {
                 </motion.div>
               ))}
             </AnimatePresence>
-            {shots.length === 0 && (
-              <div className="flex h-[72px] flex-1 items-center gap-3 rounded-xl border border-dashed border-white/10 px-4 text-[12px] text-ink-3">
+            {shots.length === 0 ? (
+              <div className="flex h-[72px] flex-1 items-center gap-3 rounded-xl border border-dashed border-white/10 pr-2.5 pl-4 text-[12px] text-ink-3">
                 <ImagePlus size={18} />
-                <span>
-                  Pega una captura con <span className="kbd">Ctrl V</span> o arrástrala aquí ·{" "}
-                  <span className="kbd">Win ⇧ S</span> para recortar
+                <span className="flex-1">
+                  Pega una captura con <span className="kbd">Ctrl V</span> o arrástrala aquí
                 </span>
+                <button
+                  onClick={() => api.startSnip()}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] text-ink-2 transition hover:border-accent/50 hover:text-ink"
+                >
+                  <Scissors size={14} className="text-accent" /> Recortar pantalla
+                </button>
               </div>
+            ) : (
+              shots.length < 6 && (
+                <button
+                  onClick={() => api.startSnip()}
+                  title="Recortar otra parte de la pantalla"
+                  className="flex h-[72px] w-[72px] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/10 text-[11px] text-ink-3 transition hover:border-accent/50 hover:text-ink-2"
+                >
+                  <Scissors size={16} />
+                  Recortar
+                </button>
+              )
             )}
           </div>
         </div>

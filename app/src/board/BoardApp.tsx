@@ -81,7 +81,12 @@ export function BoardApp() {
     refresh();
     const un = onTasksChanged(refresh);
     // Las fechas relativas («hace 3 min») se refrescan solas.
-    const tick = setInterval(() => setBoard((b) => (b ? { ...b } : b)), 30_000);
+    // Cada 30 s: sesiones activas al día (abrir o cerrar una conversación no avisa) y, de paso,
+    // se vuelven a pintar los «hace X min».
+    const tick = setInterval(async () => {
+      const sessions = await api.sessions().catch(() => null);
+      setBoard((b) => (b ? { ...b, sessions: sessions ?? b.sessions } : b));
+    }, 30_000);
     return () => {
       un.then((f) => f());
       clearInterval(tick);

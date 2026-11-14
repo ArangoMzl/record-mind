@@ -1,7 +1,9 @@
 //! Comandos que invoca la interfaz.
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use rm_core::{Memory, MemoryRelation, NewTask, SessionInfo, Status, Task, TaskDetail, TaskEdit, TaskFilter};
+use rm_core::{
+    Memory, MemoryRelation, NewTask, ProjectSummary, SessionInfo, Status, Task, TaskDetail, TaskEdit, TaskFilter, claude_code,
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -72,16 +74,12 @@ pub struct TaskCard {
 }
 
 #[derive(Serialize)]
-pub struct ProjectCount {
-    pub name: String,
-    pub counts: [i64; 4],
-}
-
-#[derive(Serialize)]
 pub struct Board {
     pub tasks: Vec<TaskCard>,
-    pub projects: Vec<ProjectCount>,
-    pub active: Option<SessionInfo>,
+    /// Proyectos con tareas y los que conoce Claude Code (estos con contadores a cero).
+    pub projects: Vec<ProjectSummary>,
+    /// Conversaciones de Claude Code con actividad reciente, la más reciente primero.
+    pub sessions: Vec<SessionInfo>,
     pub mcp_url: Option<String>,
     pub engram: bool,
     pub shortcut: &'static str,
@@ -96,22 +94,25 @@ pub fn board(state: State<AppState>) -> Res<Board> {
         let d = store.detail(task.id).map_err(err)?;
         cards.push(card(d));
     }
-    let projects = store
-        .projects()
-        .map_err(err)?
-        .into_iter()
-        .map(|(name, counts)| ProjectCount { name, counts })
-        .collect();
+    let with_tasks = store.projects().map_err(err)?;
     drop(store);
     let mut engram = state.engram();
+    let projects = claude_code::merge_projects(with_tasks, &claude_code::known_projects(&mut engram));
     Ok(Board {
         tasks: cards,
         projects,
-        active: engram.active_session(),
+        sessions: claude_code::live_sessions(&mut engram),
         mcp_url: state.mcp_url.lock().unwrap().clone(),
         engram: engram.available(),
         shortcut: CAPTURE_SHORTCUT,
     })
+}
+
+/// Solo las sesiones activas: el tablero las consulta cada poco sin recargar todas las tareas,
+/// porque abrir o cerrar una conversación no escribe en la base de tareas.
+#[tauri::command]
+pub fn live_sessions(state: State<AppState>) -> Vec<SessionInfo> {
+    claude_code::live_sessions(&mut state.engram())
 }
 
 fn card(d: TaskDetail) -> TaskCard {
@@ -175,19 +176,28 @@ pub fn task_detail(state: State<AppState>, id: i64) -> Res<TaskDetailView> {
 
 #[derive(Serialize)]
 pub struct CaptureContext {
-    pub active: Option<SessionInfo>,
+    /// Conversaciones de Claude Code con actividad reciente, la más reciente primero.
+    pub sessions: Vec<SessionInfo>,
     pub projects: Vec<String>,
 }
 
 #[tauri::command]
 pub fn capture_context(state: State<AppState>) -> Res<CaptureContext> {
-    let mut projects: Vec<String> = state.store().projects().map_err(err)?.into_iter().map(|(p, _)| p).collect();
-    let active = state.engram().active_session();
-    if let Some(a) = &active {
-        projects.retain(|p| p != &a.project);
-        projects.insert(0, a.project.clone());
+    let with_tasks = state.store().projects().map_err(err)?;
+    let mut engram = state.engram();
+    let known = claude_code::known_projects(&mut engram);
+    let mut projects: Vec<String> = claude_code::merge_projects(with_tasks, &known).into_iter().map(|p| p.name).collect();
+    let sessions = claude_code::live_sessions(&mut engram);
+    // Los proyectos con sesión activa van primero, en el mismo orden que las sesiones.
+    let mut live: Vec<String> = Vec::new();
+    for s in &sessions {
+        if !live.contains(&s.project) {
+            live.push(s.project.clone());
+        }
     }
-    Ok(CaptureContext { active, projects })
+    projects.retain(|p| !live.contains(p));
+    live.extend(projects);
+    Ok(CaptureContext { sessions, projects: live })
 }
 
 #[derive(Deserialize)]
@@ -209,8 +219,11 @@ pub struct CaptureInput {
 
 #[tauri::command]
 pub fn create_task(state: State<AppState>, input: CaptureInput) -> Res<Task> {
-    let active = state.engram().active_session();
-    let session_id = active.filter(|s| s.project == input.project).map(|s| s.id);
+    // La tarea queda enlazada a la conversación activa de su proyecto, si la hay.
+    let session_id = claude_code::live_sessions(&mut state.engram())
+        .into_iter()
+        .find(|s| s.project == input.project)
+        .map(|s| s.id);
     let images: Vec<(Vec<u8>, String)> = input
         .images
         .iter()
@@ -307,6 +320,48 @@ pub fn delete_task(state: State<AppState>, id: i64) -> Res<()> {
 pub fn hide_capture(app: AppHandle) {
     if let Some(w) = app.get_webview_window("capture") {
         let _ = w.hide();
+    }
+}
+
+#[tauri::command]
+pub async fn start_snip(app: AppHandle) -> Res<()> {
+    crate::snip::start(app).await
+}
+
+#[tauri::command]
+pub fn snip_source(app: AppHandle) -> Option<crate::snip::SnipSource> {
+    crate::snip::source(&app)
+}
+
+#[tauri::command]
+pub fn snip_ready(app: AppHandle) {
+    crate::snip::ready(&app);
+}
+
+// Asíncrono: destruye la ventana que lo invoca y puede crear la de captura.
+#[tauri::command]
+pub async fn finish_snip(app: AppHandle, rect: Option<crate::snip::SnipRect>) -> Res<()> {
+    crate::snip::finish(&app, rect)
+}
+
+/// Recortes pendientes de añadir a la captura, en el mismo formato que `create_task`.
+#[tauri::command]
+pub fn take_snips(app: AppHandle) -> Vec<SnipImage> {
+    crate::snip::take(&app).into_iter().map(|data| SnipImage { data, ext: "png" }).collect()
+}
+
+#[derive(Serialize)]
+pub struct SnipImage {
+    data: String,
+    ext: &'static str,
+}
+
+/// Agranda la ventana de captura mientras se anota una imagen y la devuelve a su tamaño
+/// normal al terminar. Asíncrono por la misma razón que `open_capture`.
+#[tauri::command]
+pub async fn resize_capture(app: AppHandle, editing: bool) {
+    if let Some(w) = app.get_webview_window("capture") {
+        crate::resize_capture(&w, editing);
     }
 }
 

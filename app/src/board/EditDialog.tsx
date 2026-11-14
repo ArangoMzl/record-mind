@@ -2,6 +2,7 @@ import { Flame, Lock, Pencil } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { PRIORITIES, type Task, type TaskEdit } from "../lib/api";
+import { ProjectPicker } from "../lib/ProjectPicker";
 
 /** Diálogo para editar título, nota, prioridad y proyecto de una tarea. */
 export function EditDialog(props: {
@@ -48,6 +49,8 @@ export function EditDialog(props: {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Con el selector de proyecto abierto, Esc solo cierra el selector.
+      if (e.key === "Escape" && (e.target as Element | null)?.closest?.("[data-picker-open]")) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         props.onClose();
@@ -137,21 +140,10 @@ export function EditDialog(props: {
                 ))}
               </div>
             </div>
-            <label className="block">
+            <div>
               <span className="eyebrow mb-1.5 block">Proyecto</span>
-              <input
-                value={project}
-                disabled={locked}
-                list="edit-projects"
-                onChange={(e) => setProject(e.target.value)}
-                className={field}
-              />
-              <datalist id="edit-projects">
-                {props.projects.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </label>
+              <ProjectPicker variant="field" value={project} projects={props.projects} disabled={locked} onChange={setProject} />
+            </div>
           </div>
 
           {error && <p className="rounded-lg bg-red-400/10 px-3 py-2 text-[12.5px] text-red-300">{error}</p>}
