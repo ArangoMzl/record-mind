@@ -1,15 +1,17 @@
-import { Brain, LayoutGrid, Plug } from "lucide-react";
-import { timeAgo, type Board } from "../lib/api";
+import { Brain, LayoutGrid, Plug, Settings } from "lucide-react";
+import { shortcutLabel, timeAgo, type Board } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
 
 export function Sidebar({
   board,
   project,
   onProject,
+  onSettings,
 }: {
   board: Board | null;
   project: string | null;
   onProject: (p: string | null) => void;
+  onSettings: () => void;
 }) {
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
   // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
@@ -92,6 +94,21 @@ export function Sidebar({
       </nav>
 
       <footer className="space-y-1.5 border-t border-line px-5 py-4 text-[11.5px] text-ink-3">
+        <button
+          onClick={onSettings}
+          className="-mx-2 mb-1.5 flex w-[calc(100%+1rem)] items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-ink-2 transition hover:bg-white/[0.05] hover:text-ink"
+        >
+          <Settings size={13} /> Ajustes
+          {board?.shortcut && (
+            <span className="ml-auto flex gap-0.5">
+              {shortcutLabel(board.shortcut).map((k, i) => (
+                <span key={i} className="kbd px-1 py-0 text-[9.5px]">
+                  {k}
+                </span>
+              ))}
+            </span>
+          )}
+        </button>
         <Status ok={!!board?.mcp_url} icon={<Plug size={12} />} label={board?.mcp_url ? "MCP en línea" : "MCP apagado"} title={board?.mcp_url ?? undefined} />
         <Status ok={!!board?.engram} icon={<Brain size={12} />} label={board?.engram ? "Engram conectado" : "Engram no encontrado"} />
       </footer>

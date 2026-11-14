@@ -130,6 +130,17 @@ export interface SnipRect {
   height: number;
 }
 
+export type ShortcutAction = "capture" | "snip";
+
+export interface ShortcutsView {
+  capture: string;
+  snip: string | null;
+  default_capture: string;
+  /** Por qué no se pudo registrar al arrancar (otra app ya lo usa…). */
+  capture_error: string | null;
+  snip_error: string | null;
+}
+
 export const api = {
   board: () => invoke<Board>("board"),
   /** Conversaciones de Claude Code con actividad reciente (consulta ligera). */
@@ -149,6 +160,11 @@ export const api = {
   duplicate: (id: number) => invoke<Task>("duplicate_task", { id }),
   remove: (id: number) => invoke<void>("delete_task", { id }),
   hideCapture: () => invoke<void>("hide_capture"),
+  getShortcuts: () => invoke<ShortcutsView>("get_shortcuts"),
+  /** null quita el atajo (solo el de recortar). Falla con un mensaje legible si no se puede usar. */
+  setShortcut: (action: ShortcutAction, shortcut: string | null) => invoke<ShortcutsView>("set_shortcut", { action, shortcut }),
+  /** Mientras se graba un atajo nuevo, los globales se apagan para que la tecla llegue al grabador. */
+  pauseShortcuts: (paused: boolean) => invoke<void>("pause_shortcuts", { paused }),
   /** Congela el monitor del ratón y abre la ventana de recorte. */
   startSnip: () => invoke<void>("start_snip"),
   snipSource: () => invoke<SnipSource | null>("snip_source"),
@@ -195,11 +211,40 @@ export function timeAgo(s: string): string {
   return parseDate(s).toLocaleDateString("es", { day: "numeric", month: "short" });
 }
 
+const KEY_LABEL: Record<string, string> = {
+  CommandOrControl: "Ctrl",
+  CmdOrCtrl: "Ctrl",
+  Control: "Ctrl",
+  Super: "Win",
+  Meta: "Win",
+  Shift: "⇧",
+  Space: "Espacio",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  BracketLeft: "[",
+  BracketRight: "]",
+};
+
+/** Acelerador de Tauri → teclas legibles: `CommandOrControl+Shift+KeyS` → [Ctrl, ⇧, S]. */
 export function shortcutLabel(s: string): string[] {
-  return s
-    .replace("CommandOrControl", "Ctrl")
-    .split("+")
-    .map((k) => (k === "Shift" ? "⇧" : k === "Space" ? "Espacio" : k));
+  return s.split("+").map((k) => {
+    if (KEY_LABEL[k]) return KEY_LABEL[k];
+    if (/^Key[A-Z]$/.test(k)) return k.slice(3);
+    if (/^Digitd$/.test(k)) return k.slice(5);
+    if (/^Numpadd$/.test(k)) return "Num " + k.slice(6);
+    return k;
+  });
 }
 
 export const EVENT_LABEL: Record<string, string> = {

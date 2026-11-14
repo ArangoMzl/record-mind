@@ -27,12 +27,14 @@ import { DetailDrawer } from "./DetailDrawer";
 import { EditDialog } from "./EditDialog";
 import { Sidebar } from "./Sidebar";
 import { TaskContextMenu, type TaskAction } from "./TaskMenu";
+import { SettingsDialog } from "./SettingsDialog";
 import { Toasts, type Toast } from "./Toasts";
 
 export function BoardApp() {
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [project, setProject] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [dragging, setDragging] = useState<TaskCard | null>(null);
@@ -238,7 +240,7 @@ export function BoardApp() {
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
-      <Sidebar board={board} project={project} onProject={setProject} />
+      <Sidebar board={board} project={project} onProject={setProject} onSettings={() => setSettingsOpen(true)} />
 
       <div className="flex min-h-0 flex-col">
         <header className="flex items-center gap-3 border-b border-line px-6 py-3.5">
@@ -350,6 +352,10 @@ export function BoardApp() {
             onSave={(edit) => saveEdit(editing.id, edit)}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} onChanged={refresh} />}
       </AnimatePresence>
 
       <Toasts toasts={toasts} />

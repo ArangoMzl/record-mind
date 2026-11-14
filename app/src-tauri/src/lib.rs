@@ -2,6 +2,7 @@
 //! icono en la bandeja y servidor MCP embebido para Claude Code.
 
 mod commands;
+mod shortcuts;
 mod snip;
 mod watcher;
 
@@ -18,9 +19,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_autostart::ManagerExt as _;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-pub const CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+Space";
+use tauri_plugin_global_shortcut::ShortcutState;
 /// Argumento con el que Windows lanza la app al iniciar sesión: arranca en la bandeja.
 const AUTOSTART_ARG: &str = "--autostart";
 const DEFAULT_MCP_PORT: u16 = 4545;
@@ -30,6 +29,7 @@ pub struct AppState {
     pub engram: Mutex<EngramReader>,
     pub mcp_url: Mutex<Option<String>>,
     pub snip: Mutex<snip::SnipState>,
+    pub shortcuts: Mutex<shortcuts::ShortcutState>,
 }
 
 impl AppState {
@@ -126,9 +126,19 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().arg(AUTOSTART_ARG).build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        show_capture(app);
+                .with_handler(|app, shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    match shortcuts::action_for(app, shortcut) {
+                        Some(shortcuts::Action::Capture) => show_capture(app),
+                        Some(shortcuts::Action::Snip) => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = snip::start(app).await;
+                            });
+                        }
+                        None => {}
                     }
                 })
                 .build(),
@@ -138,10 +148,14 @@ pub fn run() {
             engram: Mutex::new(EngramReader::open_default()),
             mcp_url: Mutex::new(None),
             snip: Mutex::default(),
+            shortcuts: Mutex::default(),
         })
         .invoke_handler(tauri::generate_handler![
             commands::board,
             commands::live_sessions,
+            commands::get_shortcuts,
+            commands::set_shortcut,
+            commands::pause_shortcuts,
             commands::task_detail,
             commands::capture_context,
             commands::create_task,
@@ -171,10 +185,8 @@ pub fn run() {
             // Las capturas se sirven por el protocolo asset:// solo desde la carpeta de datos.
             app.asset_protocol_scope().allow_directory(&data_dir, true)?;
 
-            // Atajo global de captura.
-            if let Err(e) = app.global_shortcut().register(CAPTURE_SHORTCUT) {
-                tracing::warn!("no se pudo registrar el atajo {CAPTURE_SHORTCUT}: {e}");
-            }
+            // Atajos globales guardados en settings.json (capturar y, si lo hay, recortar).
+            shortcuts::init(&handle);
 
             build_tray(&handle)?;
 
@@ -238,8 +250,10 @@ pub fn run() {
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Abrir tablero", true, None::<&str>)?;
-    let capture = MenuItem::with_id(app, "capture", "Capturar pendiente   Ctrl+Shift+Espacio", true, None::<&str>)?;
-    let snip = MenuItem::with_id(app, "snip", "Recortar pantalla", true, None::<&str>)?;
+    let (capture_text, snip_text) = shortcuts::tray_labels(app);
+    let capture = MenuItem::with_id(app, "capture", capture_text, true, None::<&str>)?;
+    let snip = MenuItem::with_id(app, "snip", snip_text, true, None::<&str>)?;
+    shortcuts::set_tray_items(app, capture.clone(), snip.clone());
     let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart = CheckMenuItem::with_id(app, "autostart", "Iniciar con Windows", true, autostart_on, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;

@@ -7,7 +7,7 @@ use rm_core::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::{AppState, CAPTURE_SHORTCUT};
+use crate::{AppState, shortcuts};
 
 type Res<T> = Result<T, String>;
 
@@ -82,11 +82,12 @@ pub struct Board {
     pub sessions: Vec<SessionInfo>,
     pub mcp_url: Option<String>,
     pub engram: bool,
-    pub shortcut: &'static str,
+    /// Atajo de captura actual (acelerador de Tauri).
+    pub shortcut: String,
 }
 
 #[tauri::command]
-pub fn board(state: State<AppState>) -> Res<Board> {
+pub fn board(app: AppHandle, state: State<AppState>) -> Res<Board> {
     let store = state.store();
     let tasks = store.list(&TaskFilter::default()).map_err(err)?;
     let mut cards = Vec::with_capacity(tasks.len());
@@ -104,8 +105,24 @@ pub fn board(state: State<AppState>) -> Res<Board> {
         sessions: claude_code::live_sessions(&mut engram),
         mcp_url: state.mcp_url.lock().unwrap().clone(),
         engram: engram.available(),
-        shortcut: CAPTURE_SHORTCUT,
+        shortcut: shortcuts::capture_shortcut(&app),
     })
+}
+
+#[tauri::command]
+pub fn get_shortcuts(app: AppHandle) -> shortcuts::ShortcutsView {
+    shortcuts::view(&app)
+}
+
+/// Cambia un atajo; devuelve un error legible si no es válido o Windows no deja registrarlo.
+#[tauri::command]
+pub fn set_shortcut(app: AppHandle, action: shortcuts::Action, shortcut: Option<String>) -> Res<shortcuts::ShortcutsView> {
+    shortcuts::set(&app, action, shortcut)
+}
+
+#[tauri::command]
+pub fn pause_shortcuts(app: AppHandle, paused: bool) {
+    shortcuts::pause(&app, paused);
 }
 
 /// Solo las sesiones activas: el tablero las consulta cada poco sin recargar todas las tareas,
