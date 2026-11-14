@@ -1,6 +1,6 @@
 ---
 name: pendientes
-argument-hint: "[números de tarea | todas]"
+argument-hint: "[números de tarea | todas | reglas]"
 description: Resuelve los micro-pendientes del tablero record-mind del proyecto actual (correcciones que el usuario capturó con nota y captura de pantalla: tamaños de letra, imágenes que no cargan, detalles que faltan), consultando y alimentando la memoria de Engram. Úsalo cuando el usuario diga "pendientes", "/pendientes", "resuelve las tareas del tablero" o "mira lo que anoté".
 ---
 
@@ -11,6 +11,8 @@ casi siempre, una captura de pantalla. **La nota más la captura son la especifi
 atención antes de tocar código.
 
 ## Primero: qué tareas trabajar
+
+Si el usuario escribió `/pendientes reglas`, salta directo a «Al terminar: errores que se repiten».
 
 Llama a `list_tasks` de record-mind con `cwd` = tu carpeta de trabajo actual. Si no hay tareas,
 dilo en una línea y termina. Después decide así, en este orden:
@@ -60,7 +62,23 @@ antiguas primero.
 Si una tarea es ambigua o te bloqueas, deja la pregunta o el motivo con `add_comment` y **no** la
 completes; pasa a la siguiente.
 
-## Al terminar
+## Al terminar: errores que se repiten
 
-Un resumen breve: una línea por tarea con `#id`, estado final y qué se hizo, y aparte las que
-quedaron bloqueadas con su pregunta.
+Llama a `find_patterns` con tu `cwd`. Muestra las tareas que el usuario **devolvió** (con sus
+notas), las palabras que se repiten entre tareas y las reglas que ya existen.
+
+- Si ves **un error que de verdad se repite** (la misma causa en 2 o más tareas, o una devolución
+  que deja clara una convención del proyecto) y no hay ya una regla que lo cubra, propón una con
+  `suggest_rule`: una frase imperativa, concreta y comprobable, con el motivo y los números de las
+  tareas. Ejemplo: «Comprueba los tamaños de letra también en el breakpoint móvil».
+- Una palabra repetida no basta: confírmalo leyendo las notas. Como mucho 2 reglas por pasada, y
+  ninguna si la evidencia es floja.
+- **Nunca edites `CLAUDE.md` tú.** La regla queda en «Reglas sugeridas» del tablero; el usuario la
+  acepta (la app la escribe en `CLAUDE.md`) o la descarta.
+
+Con `/pendientes reglas` haz solo este paso, sin trabajar tareas.
+
+## Resumen final
+
+Un resumen breve: una línea por tarea con `#id`, estado final y qué se hizo, aparte las que
+quedaron bloqueadas con su pregunta y, si sugeriste reglas, cuáles.
