@@ -96,6 +96,30 @@ hasta que el usuario responde.
 
 Para que Claude registre algo que detectó de paso y no es parte de la tarea actual.
 
+### `find_patterns`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cwd` / `project` | string? | Proyecto (uno de los dos) |
+
+Evidencia de errores que se repiten: las tareas que el usuario **devolvió** con sus notas, las
+palabras que aparecen en varias tareas y las reglas ya sugeridas o aceptadas (para no repetirlas).
+Termina con el criterio para sugerir: la misma causa en 2 o más tareas, o una devolución que deja
+clara una convención; máximo 2 reglas por pasada.
+
+### `suggest_rule`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cwd` / `project` | string? | Proyecto (uno de los dos) |
+| `rule` | string | Regla para `CLAUDE.md`: imperativa, concreta y comprobable |
+| `reason` | string | Qué error se repite y dónde se vio |
+| `task_ids` | number[]? | Tareas que lo demuestran |
+
+La regla queda **pendiente** en «Reglas sugeridas» del tablero. No acepta reglas vacías ni
+repetidas en el proyecto. Solo cuando el usuario la acepta, la app la añade al `CLAUDE.md` del
+proyecto, en la sección «Reglas aprendidas (record-mind)». Claude nunca edita `CLAUDE.md`.
+
 ## El flujo de `/pendientes`
 
 El skill ([`claude/skills/pendientes/SKILL.md`](../claude/skills/pendientes/SKILL.md)) le indica a
@@ -107,7 +131,9 @@ Claude:
    no es trivial) → cambio mínimo → verificar → `mem_save` si aprendió algo duradero →
    `complete_task`.
 3. Si una tarea es ambigua: `add_comment` con la pregunta, sin completarla.
-4. Un resumen final con una línea por tarea.
+4. **Errores que se repiten**: `find_patterns` y, si hay evidencia clara, `suggest_rule`.
+   Con `/pendientes reglas` hace solo este paso.
+5. Un resumen final con una línea por tarea y las reglas sugeridas.
 
 ## Probar el servidor a mano
 

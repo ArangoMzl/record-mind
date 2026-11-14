@@ -39,6 +39,7 @@ relativa. Las migraciones se aplican al abrir y su número se guarda en `PRAGMA 
 | `attachments` | capturas de cada tarea (ruta relativa y tipo MIME) |
 | `task_events` | historial: `created`, `claimed`, `comment`, `completed`, `approved`, `returned`, `moved`, `released`, `edited`, con su autor (`user`, `claude`, …) |
 | `task_memories` | enlaces a memorias de Engram (`consulted` o `created`) por id o `sync_id` |
+| `rule_suggestions` | reglas para `CLAUDE.md` sugeridas por Claude: proyecto, regla, motivo, tareas, estado (`pending`, `accepted`, `rejected`) |
 
 ## Reglas del tablero
 
@@ -93,6 +94,30 @@ sincronización. La abre con `SQLITE_OPEN_READ_ONLY` y la usa para tres cosas:
 
 Las memorias nuevas las guarda **Claude** con `mem_save` durante `/pendientes`, a través de Engram,
 y su id queda enlazado a la tarea con `complete_task`.
+
+## Errores repetidos y reglas para CLAUDE.md
+
+`rm_core::rules`. La idea: lo que el usuario corrige una y otra vez debería acabar como regla del
+proyecto, pero solo con su aprobación.
+
+1. Al terminar `/pendientes`, Claude llama a `find_patterns`: tareas devueltas con sus notas (la
+   señal más fuerte), palabras que se repiten en 2 o más tareas (`text::keywords`, las mismas que
+   usa la búsqueda en Engram) y las reglas que ya existen.
+2. Si ve un error que de verdad vuelve, `suggest_rule` lo guarda como **pendiente**. No se admiten
+   reglas vacías ni repetidas (sin distinguir mayúsculas) en el proyecto.
+3. El tablero las muestra en «Reglas sugeridas». Al aceptar, la app escribe la regla (quizá
+   retocada) en `<carpeta del proyecto>/CLAUDE.md` **antes** de marcarla: si no se puede escribir,
+   sigue pendiente. La carpeta sale de los proyectos de Claude Code.
+4. Se escribe como viñeta al final de la sección «## Reglas aprendidas (record-mind)», que se crea
+   si no existe. El resto del archivo no se toca, se respetan los finales de línea y una regla
+   que ya está no se duplica.
+
+## Dictado por voz
+
+El botón **Dictar** de la captura pone el cursor al final de la nota y pulsa `Win+H` con
+`SendInput` (`dictation.rs`). Windows abre su dictado sobre el campo con el foco y transcribe ahí;
+la app no graba ni envía audio. Pulsar `Win+H` con el panel abierto vuelve a escuchar en lugar de
+cerrarlo, así que para parar se usa el micrófono o la X del panel.
 
 ## Proyectos de Claude Code
 

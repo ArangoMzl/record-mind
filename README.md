@@ -58,6 +58,12 @@ y las deja **para que tú las revises**. Nunca se marcan como hechas sin tu apro
   **responderle** si dejó una pregunta.
 - **Memoria que se alimenta sola**: cuando Claude descubre algo no obvio al resolver una tarea,
   lo guarda en Engram; la próxima vez lo encuentra antes de tocar código.
+- **Errores que se repiten → reglas para `CLAUDE.md`**: al terminar `/pendientes`, Claude revisa
+  las tareas que devolviste y lo que se repite entre ellas. Si ve un error que vuelve, te propone
+  una regla en **«Reglas sugeridas»**; la editas si quieres y con «Añadir a CLAUDE.md» queda
+  escrita en el `CLAUDE.md` del proyecto. Claude nunca lo edita por su cuenta.
+- **Dictado por voz**: el botón **Dictar** de la captura abre el dictado de Windows (`Win+H`)
+  sobre la nota.
 - **Ligera**: núcleo en Rust, instalador de ~4 MB, vive en la bandeja del sistema y puede
   iniciarse con Windows.
 
@@ -187,8 +193,10 @@ docs/                    documentación
   bloqueo mientras Claude trabaja, inicio con Windows.
 - [x] **Fase 2**: anotar capturas (flechas, recuadros, lápiz, números), recorte de pantalla
   nativo, atajos configurables.
-- [ ] **Fase 3**: grafo tareas ↔ memorias ↔ sesiones, detección de errores repetidos con reglas
-  sugeridas para `CLAUDE.md`, «Resolver con Claude» desde el tablero, notas de voz.
+- [x] **Fase 3**: errores repetidos → reglas sugeridas para `CLAUDE.md` (aprobadas desde el
+  tablero) y dictado por voz con el de Windows. El grafo de tareas, memorias y sesiones se deja a
+  [Engram View](https://github.com/ArangoMzl/engram-view), que ya lo tiene.
+- [ ] **Más adelante**: «Resolver con Claude» desde el tablero.
 
 ## Licencia
 
