@@ -4,7 +4,7 @@ use std::{net::SocketAddr, path::PathBuf};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use rm_core::{EngramReader, NewTask, Status, Store, Task, TaskFilter};
+use rm_core::{EngramReader, NewTask, Status, Store, Task, TaskFilter, claude_code};
 
 #[derive(Parser)]
 #[command(name = "record-mind", version, about = "Tablero de micro-pendientes conectado a Claude Code y Engram")]
@@ -101,7 +101,7 @@ async fn main() -> Result<()> {
             let note = note.join(" ");
             let (project, session_id) = match project {
                 Some(p) => (p, None),
-                None => match engram.active_session() {
+                None => match claude_code::live_sessions(&mut engram).into_iter().next() {
                     Some(s) => (s.project, Some(s.id)),
                     None => (engram.resolve_project(&std::env::current_dir()?.to_string_lossy()), None),
                 },
@@ -190,9 +190,12 @@ async fn main() -> Result<()> {
         Cmd::Where => {
             println!("Datos:   {}", store.root().display());
             println!("Engram:  {} ({})", engram.path().display(), if engram.available() { "encontrado" } else { "no encontrado" });
-            match engram.active_session() {
-                Some(s) => println!("Sesión activa: {} · {} · {}", s.project, s.directory, s.id),
-                None => println!("Sesión activa: ninguna"),
+            let sessions = claude_code::live_sessions(&mut engram);
+            if sessions.is_empty() {
+                println!("Sesiones activas: ninguna");
+            }
+            for s in sessions {
+                println!("Sesión activa: {} · {} · {} · última actividad {} UTC", s.project, s.directory, s.id, s.last_activity);
             }
         }
         Cmd::Mcp | Cmd::Serve { .. } => unreachable!(),

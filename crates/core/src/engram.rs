@@ -12,6 +12,8 @@ pub struct SessionInfo {
     pub project: String,
     pub directory: String,
     pub started_at: String,
+    /// Última señal de vida, en UTC (`AAAA-MM-DD HH:MM:SS`).
+    pub last_activity: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,17 +65,22 @@ impl EngramReader {
         self.conn.as_ref()
     }
 
-    /// Sesión de Claude Code abierta con actividad más reciente (últimas 12 horas).
+    /// Sesión de Claude Code abierta con actividad más reciente (últimas 12 horas), según Engram.
+    /// Es el respaldo de [`crate::claude_code::live_sessions`], que mira las conversaciones de
+    /// Claude Code directamente y es mucho más fiable.
+    ///
     /// La concesión de Engram (`runtime_lease_expires_at`) no siempre se renueva y hay sesiones
-    /// que nunca se cierran, así que se usa la última señal de vida: inicio, concesión,
-    /// último prompt o última memoria.
+    /// que nunca se cierran, así que se usa la última señal de vida: inicio, concesión, último
+    /// prompt o última memoria. La concesión vence 30 minutos después de renovarse, así que esa
+    /// renovación es la concesión menos 30 minutos: usarla tal cual (una fecha futura) hacía que
+    /// cualquier sesión recién abierta ganara a las que de verdad estaban en uso.
     pub fn active_session(&mut self) -> Option<SessionInfo> {
         let conn = self.conn()?;
         conn.query_row(
-            "SELECT id, project, directory, started_at FROM (
+            "SELECT id, project, directory, started_at, last_seen FROM (
                 SELECT s.id, s.project, s.directory, s.started_at,
                        MAX(substr(s.started_at, 1, 19),
-                           COALESCE(s.runtime_lease_expires_at, ''),
+                           COALESCE(datetime(s.runtime_lease_expires_at, '-30 minutes'), ''),
                            COALESCE((SELECT MAX(created_at) FROM user_prompts p WHERE p.session_id = s.id), ''),
                            COALESCE((SELECT MAX(created_at) FROM observations o WHERE o.session_id = s.id), '')
                        ) AS last_seen
@@ -84,7 +91,13 @@ impl EngramReader {
              ORDER BY last_seen DESC LIMIT 1",
             [],
             |r| {
-                Ok(SessionInfo { id: r.get(0)?, project: r.get(1)?, directory: r.get(2)?, started_at: r.get(3)? })
+                Ok(SessionInfo {
+                    id: r.get(0)?,
+                    project: r.get(1)?,
+                    directory: r.get(2)?,
+                    started_at: r.get(3)?,
+                    last_activity: r.get(4)?,
+                })
             },
         )
         .optional()

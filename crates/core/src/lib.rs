@@ -1,10 +1,12 @@
 //! Núcleo de record-mind: tareas, adjuntos, historial y lectura (solo lectura) de Engram.
 
+pub mod claude_code;
 pub mod engram;
 pub mod model;
 pub mod paths;
 pub mod store;
 
+pub use claude_code::{KnownProject, ProjectSummary};
 pub use engram::{EngramReader, Memory, SessionInfo};
 pub use model::{Attachment, MemoryLink, MemoryRelation, NewTask, Status, Task, TaskDetail, TaskEvent};
 pub use store::{Store, TaskEdit, TaskFilter};
