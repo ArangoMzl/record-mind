@@ -61,6 +61,15 @@ ALTER TABLE tasks ADD COLUMN queued_at TEXT;
 "#,
 ];
 
+/// Cambios a mano sobre una tarea. `None` = no tocar ese campo.
+#[derive(Debug, Clone, Default)]
+pub struct TaskEdit {
+    pub title: Option<String>,
+    pub note: Option<String>,
+    pub priority: Option<i64>,
+    pub project: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TaskFilter {
     pub project: Option<String>,
@@ -343,6 +352,75 @@ impl Store {
                 event_from_row,
             )
             .map_err(Into::into)
+    }
+
+    /// Edita título, nota, prioridad o proyecto. Mientras Claude la trabaja solo se puede
+    /// cambiar la prioridad, para no moverle el enunciado a mitad de camino.
+    pub fn update(&mut self, id: i64, edit: TaskEdit, actor: &str) -> Result<Task> {
+        let cur = self.task(id)?;
+        let title = edit.title.map(|t| t.trim().to_string()).filter(|t| *t != cur.title);
+        let note = edit.note.map(|n| n.trim().to_string()).filter(|n| *n != cur.note);
+        let project = edit.project.map(|p| p.trim().to_string()).filter(|p| *p != cur.project);
+        let priority = edit.priority.map(|p| p.clamp(0, 2)).filter(|p| *p != cur.priority);
+
+        if title.as_deref() == Some("") {
+            return Err(Error::Invalid("el título no puede quedar vacío".into()));
+        }
+        if project.as_deref() == Some("") {
+            return Err(Error::Invalid("el proyecto no puede quedar vacío".into()));
+        }
+        if cur.status == Status::InProgress && (title.is_some() || note.is_some() || project.is_some()) {
+            return Err(Error::Invalid(
+                "la tarea está en curso; mientras Claude la trabaja solo se puede cambiar la prioridad".into(),
+            ));
+        }
+
+        let changed: Vec<&str> = [
+            (title.is_some(), "título"),
+            (note.is_some(), "nota"),
+            (priority.is_some(), "prioridad"),
+            (project.is_some(), "proyecto"),
+        ]
+        .into_iter()
+        .filter_map(|(c, name)| c.then_some(name))
+        .collect();
+        if changed.is_empty() {
+            return Ok(cur);
+        }
+
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            &format!(
+                "UPDATE tasks SET title = COALESCE(?2, title), note = COALESCE(?3, note),
+                        priority = COALESCE(?4, priority), project = COALESCE(?5, project), updated_at = {NOW}
+                 WHERE id = ?1"
+            ),
+            params![id, title, note, priority, project],
+        )?;
+        insert_event(&tx, id, "edited", actor, &changed.join(", "))?;
+        tx.commit()?;
+        self.task(id)
+    }
+
+    /// Crea una copia en Capturado con el mismo texto, prioridad y capturas.
+    pub fn duplicate(&mut self, id: i64, actor: &str) -> Result<Task> {
+        let src = self.task(id)?;
+        let copy = self.create_task(
+            NewTask {
+                project: src.project,
+                title: Some(src.title),
+                note: src.note,
+                priority: src.priority,
+                session_id: None,
+                attachments: src.attachments.into_iter().map(|a| a.path).filter(|p| p.is_file()).collect(),
+            },
+            actor,
+        )?;
+        self.conn.execute(
+            "UPDATE task_events SET message = ?2 WHERE task_id = ?1 AND kind = 'created'",
+            params![copy.id, format!("copia de #{id}")],
+        )?;
+        Ok(copy)
     }
 
     pub fn delete(&mut self, id: i64) -> Result<()> {
@@ -653,6 +731,28 @@ mod tests {
 
         let list = s.list(&TaskFilter { project: Some("demo".into()), statuses: vec![Status::Inbox], ..Default::default() }).unwrap();
         assert_eq!(list.len(), 1);
+
+        // Edición: el título no puede quedar vacío; los cambios quedan en el historial.
+        let blank = TaskEdit { title: Some("  ".into()), ..Default::default() };
+        assert!(matches!(s.update(t.id, blank, "user"), Err(Error::Invalid(_))));
+        let edit = TaskEdit { title: Some("Título más grande".into()), priority: Some(5), ..Default::default() };
+        let e = s.update(t.id, edit, "user").unwrap();
+        assert_eq!((e.title.as_str(), e.priority), ("Título más grande", 2));
+        assert_eq!(s.detail(t.id).unwrap().events.last().unwrap().message, "título, prioridad");
+
+        // Copia: nueva tarea en Capturado con sus propias capturas.
+        let c = s.duplicate(t.id, "user").unwrap();
+        assert_ne!(c.id, t.id);
+        assert_eq!((c.status, c.title.as_str(), c.attachments.len()), (Status::Inbox, "Título más grande", 1));
+        assert_ne!(c.attachments[0].path, e.attachments[0].path);
+
+        // En curso solo se cambia la prioridad.
+        s.claim(t.id, "claude").unwrap();
+        let note = TaskEdit { note: Some("otra".into()), ..Default::default() };
+        assert!(matches!(s.update(t.id, note, "user"), Err(Error::Invalid(_))));
+        let prio = TaskEdit { priority: Some(0), ..Default::default() };
+        assert_eq!(s.update(t.id, prio, "user").unwrap().priority, 0);
+        s.release(t.id, "user", "").unwrap();
 
         s.delete(t.id).unwrap();
         assert!(matches!(s.task(t.id), Err(Error::NotFound(_))));

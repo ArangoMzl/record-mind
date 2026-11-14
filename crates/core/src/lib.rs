@@ -7,7 +7,7 @@ pub mod store;
 
 pub use engram::{EngramReader, Memory, SessionInfo};
 pub use model::{Attachment, MemoryLink, MemoryRelation, NewTask, Status, Task, TaskDetail, TaskEvent};
-pub use store::{Store, TaskFilter};
+pub use store::{Store, TaskEdit, TaskFilter};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
