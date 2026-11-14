@@ -3206,6 +3206,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
+ "png",
  "rm-core",
  "rm-mcp",
  "rusqlite",
@@ -3219,6 +3220,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "windows",
 ]
 
 [[package]]

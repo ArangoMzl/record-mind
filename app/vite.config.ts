@@ -13,6 +13,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         capture: resolve(__dirname, "capture.html"),
+        snip: resolve(__dirname, "snip.html"),
       },
     },
   },

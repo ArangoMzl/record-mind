@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permisos de las ventanas del tablero y de captura",
-  "windows": ["main", "capture"],
+  "description": "Permisos de las ventanas del tablero, de captura y de recorte",
+  "windows": ["main", "capture", "snip"],
   "permissions": [
     "core:default",
     "core:window:allow-hide",

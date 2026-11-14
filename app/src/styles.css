@@ -72,6 +72,7 @@
       linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px) 0 0 / 48px 100%;
   }
   html.capture-html, body.capture { background: transparent; overflow: hidden; }
+  body.snip { background: #000; overflow: hidden; }
 
   textarea, input, [contenteditable] { user-select: text; }
   button { cursor: pointer; }

@@ -43,6 +43,23 @@
         "focus": true,
         "create": false,
         "additionalBrowserArgs": "--disable-gpu --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+      },
+      {
+        "label": "snip",
+        "title": "Recortar pantalla",
+        "url": "snip.html",
+        "width": 800,
+        "height": 600,
+        "resizable": false,
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": true,
+        "backgroundColor": "#000000",
+        "create": false,
+        "additionalBrowserArgs": "--disable-gpu --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
       }
     ],
     "security": {
