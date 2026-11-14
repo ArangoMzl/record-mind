@@ -37,7 +37,7 @@ relativa. Las migraciones se aplican al abrir y su número se guarda en `PRAGMA 
 |---|---|
 | `tasks` | proyecto, título, nota, estado, prioridad (0–2), sesión de origen, resolución, archivos tocados, `queued_at` (cola) |
 | `attachments` | capturas de cada tarea (ruta relativa y tipo MIME) |
-| `task_events` | historial: `created`, `claimed`, `comment`, `completed`, `approved`, `returned`, `moved`, `released`, con su autor (`user`, `claude`, …) |
+| `task_events` | historial: `created`, `claimed`, `comment`, `completed`, `approved`, `returned`, `moved`, `released`, `edited`, con su autor (`user`, `claude`, …) |
 | `task_memories` | enlaces a memorias de Engram (`consulted` o `created`) por id o `sync_id` |
 
 ## Reglas del tablero
@@ -54,6 +54,12 @@ Las reglas viven en `rm-core` (`Store`), así que valen igual para la app, la CL
 | Capturado ↔ Para revisar / Hecho | Arrastrar o «Mover a…» | Persona |
 
 - Nadie puede **soltar** una tarea en «Claude trabajando» a mano, ni sacarla de ahí arrastrándola.
+- **Editar** (`update`: título, nota, prioridad, proyecto) deja un evento `edited` con los campos
+  cambiados. Mientras la tarea está en «Claude trabajando» solo se puede cambiar la prioridad.
+  **Duplicar** crea una copia en Capturado con sus propias capturas.
+- En el tablero, el **clic derecho** sobre una tarjeta abre su menú: abrir, editar, prioridad,
+  cola, aprobar, mover, duplicar, copiar y eliminar (con doble confirmación). Con el menú abierto,
+  las letras indicadas (`E`, `D`, `1`–`3`, `C`, `A`, `Supr`) disparan la acción.
 - **Quién trabaja una tarea** se deduce del historial: un `claimed` abre el turno del agente y
   cualquier `moved`, `released`, `completed`, `returned` o `approved` lo cierra. La interfaz
   muestra ese agente, desde cuándo y su último mensaje.
