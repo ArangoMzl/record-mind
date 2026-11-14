@@ -4,6 +4,7 @@ pub mod claude_code;
 pub mod engram;
 pub mod model;
 pub mod paths;
+pub mod settings;
 pub mod store;
 
 pub use claude_code::{KnownProject, ProjectSummary};
