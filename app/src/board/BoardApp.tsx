@@ -10,11 +10,23 @@ import {
 import { Plus, Search } from "lucide-react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, onTasksChanged, shortcutLabel, STATUSES, type Board, type Status, type TaskCard } from "../lib/api";
+import {
+  api,
+  onTasksChanged,
+  shortcutLabel,
+  STATUSES,
+  type Board,
+  type Status,
+  type Task,
+  type TaskCard,
+  type TaskEdit,
+} from "../lib/api";
 import { Column } from "./Column";
 import { CardView } from "./TaskCardView";
 import { DetailDrawer } from "./DetailDrawer";
+import { EditDialog } from "./EditDialog";
 import { Sidebar } from "./Sidebar";
+import { TaskContextMenu, type TaskAction } from "./TaskMenu";
 import { Toasts, type Toast } from "./Toasts";
 
 export function BoardApp() {
@@ -25,7 +37,11 @@ export function BoardApp() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [dragging, setDragging] = useState<TaskCard | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [menu, setMenu] = useState<{ task: TaskCard; x: number; y: number } | null>(null);
+  const [editing, setEditing] = useState<Task | null>(null);
   const prev = useRef<Map<number, TaskCard> | null>(null);
+  /** Tareas creadas desde aquí (duplicadas) que no deben avisar como «capturada». */
+  const quiet = useRef(new Set<number>());
   const searchRef = useRef<HTMLInputElement>(null);
 
   const pushToast = useCallback((t: Omit<Toast, "id">) => {
@@ -42,7 +58,7 @@ export function BoardApp() {
         for (const t of b.tasks) {
           const before = prev.current.get(t.id);
           if (!before) {
-            pushToast({ tone: "inbox", title: `#${t.id} capturada`, body: t.title });
+            if (!quiet.current.delete(t.id)) pushToast({ tone: "inbox", title: `#${t.id} capturada`, body: t.title });
           } else if (before.status !== t.status) {
             if (t.status === "in_progress")
               pushToast({ tone: "progress", title: `Claude tomó #${t.id}`, body: t.title });
@@ -108,12 +124,9 @@ export function BoardApp() {
     setDragging(board?.tasks.find((t) => t.id === e.active.id) ?? null);
   };
 
-  const onDragEnd = async (e: DragEndEvent) => {
-    setDragging(null);
-    const to = e.over?.id as Status | undefined;
-    const task = board?.tasks.find((t) => t.id === e.active.id);
-    if (!to || !task || task.status === to || to === "in_progress" || task.status === "in_progress") return;
-    // Optimista: se mueve ya y se corrige si falla.
+  /** Mover a mano (arrastrar o menú). Optimista: se mueve ya y se corrige si falla. */
+  const moveTask = async (task: TaskCard, to: Status) => {
+    if (task.status === to || to === "in_progress" || task.status === "in_progress") return;
     setBoard((b) => b && { ...b, tasks: b.tasks.map((t) => (t.id === task.id ? { ...t, status: to } : t)) });
     if (prev.current) prev.current.set(task.id, { ...task, status: to });
     try {
@@ -122,6 +135,74 @@ export function BoardApp() {
     } catch (err) {
       pushToast({ tone: "error", title: "No se pudo mover", body: String(err) });
       refresh();
+    }
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    setDragging(null);
+    const to = e.over?.id as Status | undefined;
+    const task = board?.tasks.find((t) => t.id === e.active.id);
+    if (to && task) moveTask(task, to);
+  };
+
+  const saveEdit = async (id: number, edit: TaskEdit) => {
+    await api.update(id, edit);
+    pushToast({ tone: "inbox", title: `#${id} actualizada` });
+  };
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      pushToast({ tone: "inbox", title: "Copiado al portapapeles", body: text.split("\n")[0] });
+    } catch (err) {
+      pushToast({ tone: "error", title: "No se pudo copiar", body: String(err) });
+    }
+  };
+
+  /** Acciones del menú contextual de una tarjeta. */
+  const onMenuAction = async (task: TaskCard, a: TaskAction) => {
+    const fail = (title: string) => (err: unknown) => {
+      pushToast({ tone: "error", title, body: String(err) });
+      refresh();
+    };
+    switch (a.kind) {
+      case "open":
+        return setOpenId(task.id);
+      case "edit":
+        return setEditing(task);
+      case "priority":
+        setBoard((b) => b && { ...b, tasks: b.tasks.map((t) => (t.id === task.id ? { ...t, priority: a.value } : t)) });
+        return api.update(task.id, { priority: a.value }).catch(fail("No se pudo cambiar la prioridad"));
+      case "queue":
+        return setQueued([task.id], !task.queued);
+      case "move":
+        return moveTask(task, a.to);
+      case "approve":
+        return quickApprove(task.id);
+      case "duplicate":
+        try {
+          const dup = await api.duplicate(task.id);
+          quiet.current.add(dup.id);
+          pushToast({ tone: "inbox", title: `#${dup.id} creada`, body: `Copia de #${task.id}` });
+        } catch (err) {
+          fail("No se pudo duplicar")(err);
+        }
+        return;
+      case "copy": {
+        const note = task.note && task.note !== task.title ? `\n\n${task.note}` : "";
+        return copy(a.what === "id" ? `#${task.id}` : `#${task.id} ${task.title}${note}`);
+      }
+      case "delete":
+        setBoard((b) => b && { ...b, tasks: b.tasks.filter((t) => t.id !== task.id) });
+        prev.current?.delete(task.id);
+        if (openId === task.id) setOpenId(null);
+        try {
+          await api.remove(task.id);
+          pushToast({ tone: "inbox", title: `#${task.id} borrada`, body: task.title });
+        } catch (err) {
+          fail("No se pudo borrar")(err);
+        }
+        return;
     }
   };
 
@@ -145,6 +226,8 @@ export function BoardApp() {
     }
   };
 
+  // La versión al día de la tarea del menú (si se borró por fuera, el menú se cierra solo).
+  const menuTask = menu ? board?.tasks.find((t) => t.id === menu.task.id) : undefined;
   const shortcut = shortcutLabel(board?.shortcut ?? "CommandOrControl+Shift+Space");
   const reviewCount = byStatus.review.length;
 
@@ -214,6 +297,8 @@ export function BoardApp() {
                   onApprove={quickApprove}
                   onToggleQueue={(t) => setQueued([t.id], !t.queued)}
                   onQueue={setQueued}
+                  onContextMenu={(task, x, y) => setMenu({ task, x, y })}
+                  menuId={menu?.task.id ?? null}
                   empty={board !== null && board.tasks.length === 0}
                   shortcut={shortcut}
                 />
@@ -234,6 +319,30 @@ export function BoardApp() {
             version={board?.tasks.find((t) => t.id === openId)?.updated_at}
             onClose={() => setOpenId(null)}
             onToast={pushToast}
+            onEdit={setEditing}
+          />
+        )}
+      </AnimatePresence>
+
+      {menuTask && menu && (
+        <TaskContextMenu
+          key={`${menuTask.id}-${menu.x}-${menu.y}`}
+          task={menuTask}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onAction={(a) => onMenuAction(menuTask, a)}
+        />
+      )}
+
+      <AnimatePresence>
+        {editing && (
+          <EditDialog
+            key={editing.id}
+            task={editing}
+            projects={board?.projects.map((p) => p.name) ?? []}
+            onClose={() => setEditing(null)}
+            onSave={(edit) => saveEdit(editing.id, edit)}
           />
         )}
       </AnimatePresence>

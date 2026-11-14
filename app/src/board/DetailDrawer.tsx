@@ -1,4 +1,4 @@
-import { Brain, Check, CircleDashed, FileCode2, Lock, Plus, RotateCcw, Sparkles, Trash2, Unlock, X } from "lucide-react";
+import { Brain, Check, CircleDashed, FileCode2, Lock, Pencil, Plus, RotateCcw, Sparkles, Trash2, Unlock, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -30,6 +30,7 @@ export function DetailDrawer(props: {
   version?: string;
   onClose: () => void;
   onToast: (t: Omit<Toast, "id">) => void;
+  onEdit: (task: TaskDetail) => void;
 }) {
   const [d, setD] = useState<TaskDetail | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -105,7 +106,14 @@ export function DetailDrawer(props: {
                     {d.queued ? "En cola para Claude" : "Poner en cola para Claude"}
                   </button>
                 )}
-                <button onClick={props.onClose} className="ml-auto rounded-lg p-1 text-ink-3 hover:bg-white/5 hover:text-ink">
+                <button
+                  onClick={() => props.onEdit(d)}
+                  title={d.status === "in_progress" ? "Editar prioridad" : "Editar título, nota, prioridad o proyecto"}
+                  className="ml-auto rounded-lg p-1.5 text-ink-3 hover:bg-white/5 hover:text-ink"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button onClick={props.onClose} className="rounded-lg p-1 text-ink-3 hover:bg-white/5 hover:text-ink">
                   <X size={18} />
                 </button>
               </div>

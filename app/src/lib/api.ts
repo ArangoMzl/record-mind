@@ -94,6 +94,20 @@ export interface CaptureContext {
   projects: string[];
 }
 
+/** Campos a cambiar; los que no van se dejan como están. */
+export interface TaskEdit {
+  title?: string;
+  note?: string;
+  priority?: number;
+  project?: string;
+}
+
+export const PRIORITIES = [
+  { value: 0, label: "Normal" },
+  { value: 1, label: "Alta" },
+  { value: 2, label: "Urgente" },
+] as const;
+
 export interface ImageInput {
   data: string;
   ext: string;
@@ -112,6 +126,8 @@ export const api = {
   approve: (id: number) => invoke<Task>("approve_task", { id }),
   reopen: (id: number, note: string) => invoke<Task>("reopen_task", { id, note }),
   comment: (id: number, message: string) => invoke<void>("comment_task", { id, message }),
+  update: (id: number, edit: TaskEdit) => invoke<Task>("update_task", { id, edit }),
+  duplicate: (id: number) => invoke<Task>("duplicate_task", { id }),
   remove: (id: number) => invoke<void>("delete_task", { id }),
   hideCapture: () => invoke<void>("hide_capture"),
   openBoard: () => invoke<void>("open_board"),
@@ -166,6 +182,7 @@ export const EVENT_LABEL: Record<string, string> = {
   comment: "comentó",
   moved: "la movió",
   released: "la liberó",
+  edited: "editó",
 };
 
 export const actorName = (actor: string) => (actor === "user" ? "Tú" : actor === "claude" ? "Claude" : actor);

@@ -17,6 +17,9 @@ export function Column(props: {
   onApprove: (id: number) => void;
   onToggleQueue: (task: TaskCard) => void;
   onQueue: (ids: number[], queued: boolean) => void;
+  onContextMenu: (task: TaskCard, x: number, y: number) => void;
+  /** Tarjeta con el menú contextual abierto (se resalta). */
+  menuId: number | null;
   empty: boolean;
   shortcut: string[];
 }) {
@@ -101,6 +104,8 @@ export function Column(props: {
               onOpen={props.onOpen}
               onApprove={props.onApprove}
               onToggleQueue={props.onToggleQueue}
+              onContextMenu={props.onContextMenu}
+              menuOpen={props.menuId === t.id}
             />
           ))}
         </AnimatePresence>
@@ -117,6 +122,8 @@ function DraggableCard(props: {
   onOpen: (id: number) => void;
   onApprove: (id: number) => void;
   onToggleQueue: (task: TaskCard) => void;
+  onContextMenu: (task: TaskCard, x: number, y: number) => void;
+  menuOpen: boolean;
 }) {
   // Mientras un agente la trabaja no se puede arrastrar (se libera desde el detalle).
   const { attributes, listeners, setNodeRef } = useDraggable({
@@ -134,7 +141,11 @@ function DraggableCard(props: {
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       {...attributes}
       {...listeners}
-      className="outline-none"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        props.onContextMenu(props.task, e.clientX, e.clientY);
+      }}
+      className={`rounded-xl outline-none ${props.menuOpen ? "ring-1 ring-accent/60" : ""}`}
     >
       <CardView
         task={props.task}
