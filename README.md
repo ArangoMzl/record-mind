@@ -98,16 +98,21 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 > de memoria, [Engram](https://engram.gentlemanprogramming.com/) (opcional).
 
 1. **App**: descarga `record-mind_<versión>_x64-setup.exe` desde
-   [Releases](../../releases) y ábrelo con **doble clic** desde el Explorador.
-2. **CLI / servidor MCP**: descarga `record-mind.exe` del mismo release (o compílalo, ver abajo),
-   déjalo en una carpeta de tu `PATH` y regístralo en Claude Code:
+   [Releases](../../releases) y ábrelo con **doble clic** desde el Explorador. Al abrirse, la app
+   se conecta sola con Claude Code: registra su MCP (`http://127.0.0.1:4545/mcp`) en
+   `~/.claude.json` e instala la skill `/pendientes` en `~/.claude/skills/pendientes`. No toca un
+   `record-mind` que ya tengas registrado, ni una skill que hayas editado, y si quitas cualquiera
+   de los dos no los vuelve a poner. Reinicia Claude Code si estaba abierto.
+2. **Opcional, CLI / servidor MCP por stdio** (funciona aunque la app esté cerrada): descarga
+   `record-mind.exe` del mismo release (o compílalo, ver abajo), déjalo en una carpeta de tu `PATH`
+   y regístralo en lugar del de la app:
 
    ```bash
+   claude mcp remove -s user record-mind
    claude mcp add -s user record-mind -- "C:/ruta/a/record-mind.exe" mcp
    ```
 
-3. **Skill `/pendientes`**: copia [`claude/skills/pendientes`](claude/skills/pendientes) a
-   `~/.claude/skills/pendientes`.
+   A mano, la skill está en [`claude/skills/pendientes`](claude/skills/pendientes).
 
 > [!IMPORTANT]
 > No instales ni lances la app desde una terminal de **Claude Desktop**. Es una app empaquetada

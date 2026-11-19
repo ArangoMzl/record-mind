@@ -238,6 +238,21 @@ pub fn run() {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(DEFAULT_MCP_PORT);
             let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+            // Conecta con Claude Code sin pasos a mano: registra este MCP en la configuración de
+            // usuario e instala la skill /pendientes. El instalador abre la app al terminar, así
+            // que queda hecho al instalar; en cada arranque se completa lo que faltara.
+            let setup_dir = data_dir.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let report = rm_core::claude_setup::ensure(&setup_dir, &format!("http://{addr}/mcp"));
+                for (what, result) in [("MCP", report.mcp), ("skill /pendientes", report.skill)] {
+                    match result {
+                        Ok(outcome) => tracing::info!("Claude Code, {what}: {outcome:?}"),
+                        Err(e) => tracing::warn!("no se pudo configurar {what} en Claude Code: {e}"),
+                    }
+                }
+            });
+
             let server = rm_mcp::RecordMind::shared(store.clone(), EngramReader::open_default());
             let mcp_handle = handle.clone();
             tauri::async_runtime::spawn(async move {

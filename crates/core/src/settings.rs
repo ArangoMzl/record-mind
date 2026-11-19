@@ -12,6 +12,8 @@ pub const DEFAULT_CAPTURE_SHORTCUT: &str = "CommandOrControl+Shift+Space";
 #[serde(default)]
 pub struct Settings {
     pub shortcuts: Shortcuts,
+    /// Lo que la app ya configuró en Claude Code (MCP y skill), ver `claude_setup`.
+    pub claude: crate::claude_setup::ClaudeSetup,
 }
 
 /// Atajos globales, en formato de acelerador (`CommandOrControl+Shift+Space`, `Alt+KeyS`…).
@@ -71,7 +73,10 @@ mod tests {
         assert_eq!(Settings::load(&dir), Settings::default());
         assert_eq!(Settings::default().shortcuts.capture, DEFAULT_CAPTURE_SHORTCUT);
 
-        let s = Settings { shortcuts: Shortcuts { capture: "Alt+KeyQ".into(), snip: Some("CommandOrControl+Alt+KeyS".into()) } };
+        let s = Settings {
+            shortcuts: Shortcuts { capture: "Alt+KeyQ".into(), snip: Some("CommandOrControl+Alt+KeyS".into()) },
+            claude: crate::claude_setup::ClaudeSetup { mcp_registered: true, skill_hash: Some("abc".into()) },
+        };
         s.save(&dir).unwrap();
         assert_eq!(Settings::load(&dir), s);
         assert!(!dir.join("settings.json.tmp").exists());

@@ -1,6 +1,7 @@
 //! Núcleo de record-mind: tareas, adjuntos, historial y lectura (solo lectura) de Engram.
 
 pub mod claude_code;
+pub mod claude_setup;
 pub mod engram;
 pub mod model;
 pub mod paths;

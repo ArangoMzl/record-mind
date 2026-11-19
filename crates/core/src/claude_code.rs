@@ -2,7 +2,8 @@
 //! todavía no tengan tareas ni una sesión abierta.
 //!
 //! Claude Code guarda en `~/.claude.json` (o `$CLAUDE_CONFIG_DIR/.claude.json`) una entrada por
-//! cada carpeta donde se abrió. Solo se lee: nunca se escribe en la configuración de Claude.
+//! cada carpeta donde se abrió. Aquí solo se lee; la única escritura (registrar el MCP al
+//! instalar la app) está en `claude_setup`.
 
 use std::{
     io::{BufRead, BufReader, Read},

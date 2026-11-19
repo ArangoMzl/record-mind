@@ -14,6 +14,10 @@ Rust.
 
 Todos escriben en la misma base, y el tablero se entera al instante.
 
+La app registra el modo embebido ella sola al arrancar (`crates/core/src/claude_setup.rs`): añade
+`record-mind` a `mcpServers` de `~/.claude.json` si no existe, e instala la skill. Si ya hay un
+`record-mind` (por ejemplo el de stdio) lo deja como está, y si lo quitas no lo vuelve a añadir.
+
 ```bash
 # stdio, para todos los proyectos
 claude mcp add -s user record-mind -- "C:/ruta/a/record-mind.exe" mcp
