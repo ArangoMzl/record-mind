@@ -192,6 +192,14 @@ no hay una sola «sesión activa»: hay una lista (`claude_code::live_sessions`)
   al tablero por `asset://`, con el permiso limitado en tiempo de ejecución a la carpeta de datos.
 - **MCP embebido**: mientras la app está abierta, `rm-mcp` escucha por HTTP en
   `127.0.0.1:4545/mcp` (`RECORD_MIND_PORT` lo cambia), compartiendo el mismo `Store`.
+- **Puente por stdio viejo** (`claude_setup::stdio_bridge`): si el `record-mind` de Claude Code
+  es un `record-mind.exe mcp` registrado a mano, ese ejecutable no se actualiza con la app. Al
+  abrir, el tablero pide `bridge_notice` (ejecuta el `.exe` con `--version`, sin consola) y, si es
+  más viejo que la app, muestra un aviso: «Usar el de la app» (`switch_to_app`: guarda
+  `.claude.json.record-mind.bak` y pone el MCP por HTTP) o «Dejarlo así» (`bridge_dismissed`, no
+  vuelve a avisar hasta la siguiente versión). No se cambia en silencio porque quien eligió stdio
+  quiere que Claude funcione con la app cerrada; solo si la ruta ya no existe lo cambia la app
+  sola al arrancar (`repair_missing_bridge`). Otros comandos (`cargo run`, `npx`…) no se tocan.
 - **WebView2** se lanza con `--disable-gpu`. El tablero no lo necesita y la memoria baja
   aproximadamente a la mitad.
 

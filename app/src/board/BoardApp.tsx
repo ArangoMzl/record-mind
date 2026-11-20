@@ -7,8 +7,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { LayoutGrid, MessageSquareText, Plus, Search, Sparkles } from "lucide-react";
-import { AnimatePresence, LayoutGroup } from "motion/react";
+import { LayoutGrid, MessageSquareText, Plug, Plus, Search, Sparkles, X } from "lucide-react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
@@ -20,6 +20,7 @@ import {
   shortcutLabel,
   STATUSES,
   type Board,
+  type BridgeNotice,
   type Period,
   type Status,
   type Task,
@@ -104,6 +105,8 @@ export function BoardApp() {
   /** Tareas creadas desde aquí (duplicadas) que no deben avisar como «capturada». */
   const quiet = useRef(new Set<number>());
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const pushToast = useCallback((t: Omit<Toast, "id">) => {
     const id = Math.random();
@@ -223,11 +226,42 @@ export function BoardApp() {
     setUpdateOpen(true);
   };
 
+  // Puente por stdio viejo en Claude Code: se revisa una vez, cuando el MCP de la app ya está en marcha.
+  const [bridge, setBridge] = useState<BridgeNotice | null>(null);
+  const [bridgeBusy, setBridgeBusy] = useState(false);
+  const bridgeChecked = useRef(false);
+  const mcpUp = !!board?.mcp_url;
+  useEffect(() => {
+    if (!mcpUp || bridgeChecked.current) return;
+    bridgeChecked.current = true;
+    api.bridgeNotice().then(setBridge).catch(() => {});
+  }, [mcpUp]);
+
+  const fixBridge = async () => {
+    setBridgeBusy(true);
+    try {
+      await api.fixBridge();
+      setBridge(null);
+      pushToast({ tone: "review", title: "Claude Code ya usa el puente de la app", body: "Reinicia Claude Code para que tome el cambio." });
+    } catch (err) {
+      pushToast({ tone: "error", title: "No se pudo cambiar el puente", body: String(err) });
+    } finally {
+      setBridgeBusy(false);
+    }
+  };
+
+  const dismissBridge = () => {
+    setBridge(null);
+    api.dismissBridge().catch(() => {});
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchRef.current?.focus();
+        // Con la ventana estrecha el buscador completo está oculto: se abre el desplegable.
+        if (searchRef.current?.offsetParent) searchRef.current.focus();
+        else setSearchOpen(true);
       } else if (e.key === "Escape") {
         setOpenId(null);
       }
@@ -235,6 +269,16 @@ export function BoardApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // El desplegable del buscador se cierra al hacer clic fuera.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!searchBoxRef.current?.contains(e.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [searchOpen]);
 
   const visible = useMemo(() => {
     if (!board) return [];
@@ -388,6 +432,7 @@ export function BoardApp() {
   const reviewCount = byStatus.review.length;
   const projectBranch = project ? board?.projects.find((p) => p.name === project)?.branch : null;
   const periodInfo = PERIODS.find((p) => p.id === period)!;
+  const searchPlaceholder = view === "decisions" ? "Buscar decisiones" : "Buscar pendientes";
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
@@ -499,17 +544,67 @@ export function BoardApp() {
               ))}
             </div>
           )}
-          <label className="flex w-72 min-w-0 shrink items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50">
+          {/* Ventana ancha: el buscador completo. Más estrecha: solo el icono, que lo abre debajo (también con Ctrl K). */}
+          <label className="flex w-72 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50 max-2xl:hidden">
             <Search size={15} />
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={view === "decisions" ? "Buscar decisiones" : "Buscar pendientes"}
+              placeholder={searchPlaceholder}
               className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3"
             />
-            <span className="kbd max-lg:hidden">Ctrl K</span>
+            <span className="kbd whitespace-nowrap">Ctrl K</span>
           </label>
+          <div ref={searchBoxRef} className="relative shrink-0 2xl:hidden">
+            <button
+              onClick={() => setSearchOpen((v) => !v)}
+              title="Buscar (Ctrl K)"
+              aria-label="Buscar"
+              aria-expanded={searchOpen}
+              className={`relative grid size-[38px] place-items-center rounded-xl border transition ${
+                searchOpen || query
+                  ? "border-accent/50 bg-accent-soft text-accent"
+                  : "border-line bg-surface/80 text-ink-2 hover:border-line-strong hover:text-ink"
+              }`}
+            >
+              <Search size={16} />
+              {query && !searchOpen && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" />}
+            </button>
+            <AnimatePresence>
+              {searchOpen && (
+                <motion.label
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute top-full right-0 z-40 mt-2 flex w-80 items-center gap-2 rounded-xl border border-line-strong bg-elevated px-3 py-2.5 text-ink-2 shadow-2xl shadow-black/60 focus-within:border-accent/50"
+                >
+                  <Search size={15} />
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" || e.key === "Enter") {
+                        e.stopPropagation();
+                        setSearchOpen(false);
+                      }
+                    }}
+                    placeholder={searchPlaceholder}
+                    className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3"
+                  />
+                  {query ? (
+                    <button onClick={() => setQuery("")} title="Borrar la búsqueda" className="rounded-md p-0.5 text-ink-3 hover:text-ink">
+                      <X size={14} />
+                    </button>
+                  ) : (
+                    <span className="kbd whitespace-nowrap">Ctrl K</span>
+                  )}
+                </motion.label>
+              )}
+            </AnimatePresence>
+          </div>
           {update && update.releases.length > 0 && (
             <button
               onClick={() => setUpdateOpen(true)}
@@ -541,6 +636,33 @@ export function BoardApp() {
         {error && (
           <div className="mx-6 mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-[13px] text-red-300">
             {error}
+          </div>
+        )}
+
+        {bridge && (
+          <div className="mx-5 mt-4 flex items-center gap-3 rounded-xl border border-st-review/30 bg-st-review/[0.07] px-4 py-2.5">
+            <Plug size={16} className="shrink-0 text-st-review" />
+            <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-2">
+              <span className="font-medium text-ink">Claude Code usa un puente viejo de record-mind ({bridge.version}).</span>{" "}
+              Le faltan funciones de la {bridge.app_version}, como <code className="text-ink">/decisiones</code>. El de la app
+              se actualiza solo con cada versión.
+            </p>
+            <button
+              onClick={fixBridge}
+              disabled={bridgeBusy}
+              title={`Cambia ${bridge.command} por el MCP de la app en la configuración de Claude Code (guarda una copia antes)`}
+              className="shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12.5px] font-medium whitespace-nowrap text-white shadow-[0_0_18px_var(--color-accent-glow)] transition hover:brightness-110 disabled:opacity-40"
+            >
+              Usar el de la app
+            </button>
+            <button
+              onClick={dismissBridge}
+              disabled={bridgeBusy}
+              title="No volver a avisar hasta la siguiente versión"
+              className="shrink-0 rounded-xl px-3 py-1.5 text-[12.5px] whitespace-nowrap text-ink-2 hover:bg-white/5 hover:text-ink disabled:opacity-40"
+            >
+              Dejarlo así
+            </button>
           </div>
         )}
 

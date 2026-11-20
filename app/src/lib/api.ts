@@ -221,6 +221,13 @@ export interface DecisionFile {
   decisions: Decision[];
 }
 
+/** Claude Code usa un puente por stdio (`record-mind.exe mcp`) más viejo que la app. */
+export interface BridgeNotice {
+  command: string;
+  version: string;
+  app_version: string;
+}
+
 export type ShortcutAction = "capture" | "snip";
 
 export interface ShortcutsView {
@@ -284,6 +291,12 @@ export const api = {
   reopenDecision: (id: string) => invoke<Decision>("reopen_decision", { id }),
   /** Abre el .md de la conversación con el programa predeterminado. */
   openDecisionFile: (id: string) => invoke<void>("open_decision_file", { id }),
+  /** Aviso si el puente por stdio de Claude Code es más viejo que la app (null si no hace falta). */
+  bridgeNotice: () => invoke<BridgeNotice | null>("bridge_notice"),
+  /** Cambia el record-mind de Claude Code por el MCP de la app; devuelve la copia de seguridad. */
+  fixBridge: () => invoke<string>("fix_bridge"),
+  /** No vuelve a avisar hasta la siguiente versión. */
+  dismissBridge: () => invoke<void>("dismiss_bridge"),
   /** Abre el dictado de Windows (Win+H) sobre el campo con el foco. */
   startDictation: () => invoke<void>("start_dictation"),
   getShortcuts: () => invoke<ShortcutsView>("get_shortcuts"),

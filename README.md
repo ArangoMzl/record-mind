@@ -118,6 +118,11 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
    claude mcp add -s user record-mind -- "C:/ruta/a/record-mind.exe" mcp
    ```
 
+   Este puente **no se actualiza con la app**: hay que reemplazar el `.exe` en cada versión. Si
+   queda más viejo que la app, el tablero lo avisa y con **«Usar el de la app»** lo cambia por el
+   MCP de la app en un clic (guarda antes una copia de `~/.claude.json`). Si el `.exe` ya no
+   existe, la app lo cambia sola.
+
    A mano, las skills están en [`claude/skills`](claude/skills).
 
 > [!IMPORTANT]

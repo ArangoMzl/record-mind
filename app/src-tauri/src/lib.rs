@@ -189,6 +189,9 @@ pub fn run() {
             commands::resolve_decision,
             commands::reopen_decision,
             commands::open_decision_file,
+            commands::bridge_notice,
+            commands::fix_bridge,
+            commands::dismiss_bridge,
             commands::start_dictation,
             commands::get_shortcuts,
             commands::set_shortcut,
@@ -259,6 +262,7 @@ pub fn run() {
                     ("MCP", report.mcp),
                     ("skill /pendientes", report.skill),
                     ("skill /decisiones", report.decisions_skill),
+                    ("puente por stdio", report.bridge),
                 ] {
                     match result {
                         Ok(outcome) => tracing::info!("Claude Code, {what}: {outcome:?}"),

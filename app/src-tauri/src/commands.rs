@@ -3,7 +3,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use rm_core::{
     Decision, DecisionFile, Memory, MemoryRelation, NewTask, ProjectSummary, RuleSuggestion, SessionInfo, Status, Task,
-    TaskDetail, TaskEdit, TaskFilter, claude_code, decisions, rules,
+    TaskDetail, TaskEdit, TaskFilter, claude_code, claude_setup, decisions, rules, settings::Settings,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -198,6 +198,43 @@ pub fn open_decision_file(state: State<AppState>, id: String) -> Res<()> {
     let path = decisions::file_path(&dir, &id).map_err(err)?;
     std::process::Command::new("explorer").arg(&path).spawn().map_err(err)?;
     Ok(())
+}
+
+/// Aviso si Claude Code usa un puente por stdio (`record-mind.exe mcp`) más viejo que la app.
+/// Solo si el MCP de la app está en marcha, que es a donde se cambiaría. Ejecuta el `.exe` con
+/// `--version`, así que el tablero lo pide una vez al abrir, no en cada recarga.
+#[tauri::command]
+pub async fn bridge_notice(state: State<'_, AppState>) -> Res<Option<claude_setup::BridgeNotice>> {
+    if state.mcp_url.lock().unwrap().is_none() {
+        return Ok(None);
+    }
+    let dir = state.store().root().to_path_buf();
+    tauri::async_runtime::spawn_blocking(move || {
+        let config = claude_code::config_path()?;
+        let settings = Settings::load(&dir);
+        claude_setup::bridge_notice(&config, env!("CARGO_PKG_VERSION"), &settings.claude)
+    })
+    .await
+    .map_err(err)
+}
+
+/// «Usar el de la app»: cambia el `record-mind` de Claude Code por el MCP de la app. Devuelve la
+/// copia de seguridad de `.claude.json`.
+#[tauri::command]
+pub fn fix_bridge(state: State<AppState>) -> Res<String> {
+    let url = state.mcp_url.lock().unwrap().clone().ok_or("El MCP de la app no está en marcha.")?;
+    let config = claude_code::config_path().ok_or("No encuentro la configuración de Claude Code.")?;
+    let backup = claude_setup::switch_to_app(&config, &url).map_err(err)?;
+    Ok(backup.to_string_lossy().into_owned())
+}
+
+/// «Dejarlo así»: no vuelve a avisar hasta la siguiente versión de la app.
+#[tauri::command]
+pub fn dismiss_bridge(state: State<AppState>) -> Res<()> {
+    let dir = state.store().root().to_path_buf();
+    let mut settings = Settings::load(&dir);
+    settings.claude.bridge_dismissed = Some(env!("CARGO_PKG_VERSION").to_string());
+    settings.save(&dir).map_err(err)
 }
 
 /// Solo las sesiones activas: el tablero las consulta cada poco sin recargar todas las tareas,
