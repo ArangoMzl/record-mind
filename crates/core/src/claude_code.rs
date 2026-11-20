@@ -179,7 +179,7 @@ fn transcript_cwd(path: &Path) -> Option<String> {
 }
 
 /// Fecha en UTC con el formato de SQLite (`AAAA-MM-DD HH:MM:SS`), el mismo que usan las tareas.
-fn utc_string(t: SystemTime) -> String {
+pub(crate) fn utc_string(t: SystemTime) -> String {
     let secs = t.duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // Días desde 1970 a fecha civil (algoritmo de Howard Hinnant).

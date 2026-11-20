@@ -8,7 +8,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
-use rm_core::{EngramReader, MemoryRelation, NewTask, Status, Store, Task, TaskDetail, TaskFilter};
+use rm_core::{EngramReader, MemoryRelation, NewTask, Status, Store, Task, TaskDetail, TaskFilter, claude_code, decisions};
 use rmcp::{
     ErrorData as McpError, ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -27,7 +27,10 @@ Flujo: list_tasks (pasa tu cwd) → get_task (incluye capturas y memorias de Eng
 resuelve y verifica → complete_task con un resumen honesto. Nunca marques una tarea como hecha: \
 complete_task la deja «Para revisar» y la persona la aprueba o la devuelve con una nota. \
 Al terminar una pasada, find_patterns muestra errores que se repiten; si hay uno claro, propón una regla para \
-CLAUDE.md con suggest_rule (el usuario la aprueba en el tablero; nunca edites CLAUDE.md por tu cuenta).";
+CLAUDE.md con suggest_rule (el usuario la aprueba en el tablero; nunca edites CLAUDE.md por tu cuenta). \
+Decisiones: cuando una conversación deja cosas que el usuario debe decidir, la skill /decisiones las registra con \
+record_decisions. Si en una conversación se resuelve una decisión abierta del proyecto (list_decisions), ciérrala \
+con resolve_decision.";
 
 #[derive(Clone)]
 pub struct RecordMind {
@@ -140,7 +143,7 @@ impl RecordMind {
         RecordMind {
             store,
             engram: Arc::new(Mutex::new(engram)),
-            tool_router: Self::tool_router() + Self::rules_router(),
+            tool_router: Self::tool_router() + Self::rules_router() + Self::decisions_router(),
         }
     }
 
@@ -357,8 +360,135 @@ impl RecordMind {
     }
 }
 
-// El router del campo: une las herramientas de tareas y las de reglas (por defecto el macro
-// usaría `Self::tool_router()`, que solo tiene las de tareas).
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListDecisionsArgs {
+    #[serde(flatten)]
+    pub scope: ScopeArgs,
+    /// true = incluye también las ya tomadas (por defecto solo las abiertas).
+    pub include_resolved: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DecisionInput {
+    /// La decisión como pregunta corta y concreta («¿Guardamos los md en ~/.record-mind o en el repo?»).
+    pub question: String,
+    /// Por qué hay que decidirlo y qué opciones hay, en 1–3 frases.
+    pub context: Option<String>,
+    /// Lo que recomiendas tú, en una frase, si tienes una recomendación.
+    pub recommendation: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RecordDecisionsArgs {
+    #[serde(flatten)]
+    pub scope: ScopeArgs,
+    /// Id de la conversación de Claude Code, si lo conoces. Si falta se usa la conversación del
+    /// proyecto con actividad más reciente: así volver a registrar actualiza el mismo archivo.
+    pub session_id: Option<String>,
+    /// Título corto de la conversación (de qué se trabajó).
+    pub title: String,
+    /// Resumen de la conversación en 2–5 frases: qué se hizo y qué quedó a medias.
+    pub summary: String,
+    /// Decisiones que siguen abiertas: lo que el usuario debe decidir y aún no decidió.
+    pub decisions: Vec<DecisionInput>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ResolveDecisionArgs {
+    /// Id de la decisión tal como lo da list_decisions (p. ej. «record-mind/2026-11-19-e37b0b5e#2»).
+    pub id: String,
+    /// Qué se decidió, en una frase.
+    pub decision: String,
+}
+
+#[tool_router(router = decisions_router)]
+impl RecordMind {
+    #[tool(description = "Lista las decisiones pendientes que quedaron en conversaciones de Claude Code del proyecto \
+        (cosas que el usuario debe decidir), con su id. Úsalo antes de record_decisions para no repetirlas y para \
+        cerrar con resolve_decision las que ya se resolvieron en esta conversación.")]
+    async fn list_decisions(&self, Parameters(a): Parameters<ListDecisionsArgs>) -> Result<CallToolResult, McpError> {
+        let Some(project) = self.project_for(&a.scope) else {
+            return Ok(fail("indica cwd o project"));
+        };
+        let all = a.include_resolved.unwrap_or(false);
+        let files = decisions::list(&self.data_dir(), Some(&project));
+        let mut out = String::new();
+        let open: usize = files.iter().map(|f| f.open_count()).sum();
+        let _ = writeln!(out, "Decisiones de {project}: {open} abierta(s) en {} conversación(es).", files.len());
+        for f in &files {
+            let shown: Vec<_> = f.decisions.iter().filter(|d| all || !d.resolved).collect();
+            if shown.is_empty() {
+                continue;
+            }
+            let _ = writeln!(out, "\n## {} ({})", f.title, f.updated_at);
+            for d in shown {
+                let mark = if d.resolved { "x" } else { " " };
+                let _ = write!(out, "- [{mark}] {} — id: {}", d.question, d.id);
+                if !d.context.is_empty() {
+                    let _ = write!(out, "\n  {}", d.context);
+                }
+                if let Some(r) = &d.recommendation {
+                    let _ = write!(out, "\n  Recomendación: {r}");
+                }
+                if let Some(r) = &d.resolution {
+                    let _ = write!(out, "\n  Decisión: {r}");
+                }
+                out.push('\n');
+            }
+        }
+        if open == 0 && !all {
+            out.push_str("\nNo hay decisiones abiertas.");
+        }
+        Ok(ok(out))
+    }
+
+    #[tool(description = "Registra las decisiones que quedaron pendientes en esta conversación, con un resumen. \
+        Quedan en un .md que el usuario ve en la pestaña «Decisiones» del tablero. Si esta conversación ya tenía \
+        archivo, lo actualiza y no repite preguntas. Las deudas técnicas no van aquí: créalas con create_task.")]
+    async fn record_decisions(&self, Parameters(a): Parameters<RecordDecisionsArgs>) -> Result<CallToolResult, McpError> {
+        let Some(project) = self.project_for(&a.scope) else {
+            return Ok(fail("indica cwd o project"));
+        };
+        let session_id = a.session_id.filter(|s| !s.trim().is_empty()).or_else(|| {
+            claude_code::live_sessions(&mut self.engram()).into_iter().find(|s| s.project == project).map(|s| s.id)
+        });
+        let input = decisions::RecordInput {
+            project,
+            session_id,
+            title: a.title,
+            summary: a.summary,
+            decisions: a
+                .decisions
+                .into_iter()
+                .map(|d| decisions::NewDecision { question: d.question, context: d.context, recommendation: d.recommendation })
+                .collect(),
+        };
+        Ok(match decisions::record(&self.data_dir(), input, &decisions::now()) {
+            Ok(r) => ok(format!(
+                "{} {} · {} nueva(s){} · {} abierta(s) en total. Archivo: {}",
+                if r.updated { "Actualizado" } else { "Creado" },
+                r.file.key,
+                r.added,
+                if r.skipped > 0 { format!(", {} ya estaban", r.skipped) } else { String::new() },
+                r.file.open_count(),
+                r.file.path.display()
+            )),
+            Err(e) => fail(e),
+        })
+    }
+
+    #[tool(description = "Marca como tomada una decisión pendiente (de esta u otra conversación) porque en esta \
+        conversación quedó resuelta. Usa el id de list_decisions.")]
+    async fn resolve_decision(&self, Parameters(a): Parameters<ResolveDecisionArgs>) -> Result<CallToolResult, McpError> {
+        Ok(match decisions::resolve(&self.data_dir(), &a.id, Some(&a.decision), "Claude", &decisions::now()) {
+            Ok(d) => ok(format!("Decisión tomada: «{}» → {}", d.question, d.resolution.unwrap_or_default())),
+            Err(e) => fail(e),
+        })
+    }
+}
+
+// El router del campo: une las herramientas de tareas, las de reglas y las de decisiones (por
+// defecto el macro usaría `Self::tool_router()`, que solo tiene las de tareas).
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for RecordMind {
     fn get_info(&self) -> ServerConfig {
@@ -373,6 +503,10 @@ impl ServerHandler for RecordMind {
 impl RecordMind {
     fn store(&self) -> MutexGuard<'_, Store> {
         self.store.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    fn data_dir(&self) -> std::path::PathBuf {
+        self.store().root().to_path_buf()
     }
 
     fn engram(&self) -> MutexGuard<'_, EngramReader> {

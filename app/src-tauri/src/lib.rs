@@ -186,6 +186,9 @@ pub fn run() {
             commands::live_sessions,
             commands::git_branches,
             commands::decide_rule,
+            commands::resolve_decision,
+            commands::reopen_decision,
+            commands::open_decision_file,
             commands::start_dictation,
             commands::get_shortcuts,
             commands::set_shortcut,
@@ -236,7 +239,8 @@ pub fn run() {
 
             // Vigila la base: cualquier escritura (Claude por MCP, la CLI o la propia app)
             // refresca el tablero al instante.
-            watcher::spawn(handle.clone(), data_dir.join("record-mind.db"));
+            // También los .md de decisiones, que Claude escribe por MCP o la persona edita a mano.
+            watcher::spawn(handle.clone(), data_dir.join("record-mind.db"), rm_core::decisions::root(&data_dir));
 
             // Servidor MCP embebido (Streamable HTTP) compartiendo la misma base.
             let port = std::env::var("RECORD_MIND_PORT")
@@ -251,7 +255,11 @@ pub fn run() {
             let setup_dir = data_dir.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let report = rm_core::claude_setup::ensure(&setup_dir, &format!("http://{addr}/mcp"));
-                for (what, result) in [("MCP", report.mcp), ("skill /pendientes", report.skill)] {
+                for (what, result) in [
+                    ("MCP", report.mcp),
+                    ("skill /pendientes", report.skill),
+                    ("skill /decisiones", report.decisions_skill),
+                ] {
                     match result {
                         Ok(outcome) => tracing::info!("Claude Code, {what}: {outcome:?}"),
                         Err(e) => tracing::warn!("no se pudo configurar {what} en Claude Code: {e}"),

@@ -1,4 +1,4 @@
-import { Brain, LayoutGrid, Lightbulb, Plug, Settings, Sparkles } from "lucide-react";
+import { Brain, LayoutGrid, Lightbulb, MessageSquareText, Plug, Settings, Sparkles } from "lucide-react";
 import { shortcutLabel, timeAgo, type Board, type UpdateInfo } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
 import { BranchTag } from "./BranchTag";
@@ -9,6 +9,8 @@ export function Sidebar({
   onProject,
   onSettings,
   onRules,
+  view,
+  onView,
   update,
   onUpdate,
 }: {
@@ -17,11 +19,14 @@ export function Sidebar({
   onProject: (p: string | null) => void;
   onSettings: () => void;
   onRules: () => void;
+  view: "board" | "decisions";
+  onView: (v: "board" | "decisions") => void;
   update: UpdateInfo | null;
   onUpdate: () => void;
 }) {
   const newer = update?.releases[0]?.version;
   const pendingRules = board?.rules.length ?? 0;
+  const openDecisions = board?.decisions.reduce((n, f) => n + f.decisions.filter((d) => !d.resolved).length, 0) ?? 0;
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
   // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
   // La rama es la de la conversación más reciente; las demás (otros worktrees) van en el título.
@@ -89,6 +94,18 @@ export function Sidebar({
         <NavItem active={project === null} onClick={() => onProject(null)} count={total}>
           <LayoutGrid size={15} /> Todos los proyectos
         </NavItem>
+        <button
+          onClick={() => onView(view === "decisions" ? "board" : "decisions")}
+          className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
+            view === "decisions" ? "bg-white/[0.07] text-ink" : openDecisions ? "text-ink-2 hover:bg-white/[0.04] hover:text-ink" : "text-ink-3 hover:bg-white/[0.04] hover:text-ink-2"
+          }`}
+          title="Lo que quedó por decidir en tus conversaciones con Claude (/decisiones)"
+        >
+          <MessageSquareText size={15} className={openDecisions ? "text-st-review" : ""} /> Decisiones
+          {openDecisions > 0 && (
+            <span className="ml-auto rounded-full bg-st-review/20 px-1.5 font-mono text-[10.5px] font-semibold text-st-review">{openDecisions}</span>
+          )}
+        </button>
         <button
           onClick={onRules}
           className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition hover:bg-white/[0.04] ${

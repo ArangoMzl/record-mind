@@ -2,8 +2,8 @@
 
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use rm_core::{
-    Memory, MemoryRelation, NewTask, ProjectSummary, RuleSuggestion, SessionInfo, Status, Task, TaskDetail, TaskEdit,
-    TaskFilter, claude_code, rules,
+    Decision, DecisionFile, Memory, MemoryRelation, NewTask, ProjectSummary, RuleSuggestion, SessionInfo, Status, Task,
+    TaskDetail, TaskEdit, TaskFilter, claude_code, decisions, rules,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -83,6 +83,8 @@ pub struct Board {
     pub projects: Vec<ProjectSummary>,
     /// Reglas para CLAUDE.md que Claude sugirió y esperan tu decisión.
     pub rules: Vec<RuleSuggestion>,
+    /// Conversaciones con decisiones pendientes (o ya tomadas), la actualizada más recientemente primero.
+    pub decisions: Vec<DecisionFile>,
     /// Conversaciones de Claude Code con actividad reciente, la más reciente primero.
     pub sessions: Vec<SessionInfo>,
     pub mcp_url: Option<String>,
@@ -107,6 +109,7 @@ pub fn board(app: AppHandle, state: State<AppState>) -> Res<Board> {
         .into_iter()
         .filter(|r| r.status == "pending")
         .collect();
+    let decisions = decisions::list(store.root(), None);
     drop(store);
     let mut engram = state.engram();
     let known = claude_code::known_projects(&mut engram);
@@ -115,6 +118,7 @@ pub fn board(app: AppHandle, state: State<AppState>) -> Res<Board> {
         tasks: cards,
         projects,
         rules,
+        decisions,
         sessions: claude_code::live_sessions(&mut engram),
         mcp_url: state.mcp_url.lock().unwrap().clone(),
         engram: engram.available(),
@@ -170,6 +174,30 @@ pub fn decide_rule(state: State<AppState>, id: i64, accept: bool, rule: Option<S
     let (path, added) = rules::add_rule_to_claude_md(std::path::Path::new(&dir), &text).map_err(err)?;
     let rule = state.store().decide_rule(id, true, Some(&text)).map_err(err)?;
     Ok(RuleDecision { rule, path: Some(path.to_string_lossy().into_owned()), added })
+}
+
+/// Marca una decisión como tomada desde el tablero (con lo que se decidió, si lo escribiste).
+/// Descartar es tomarla con «Descartada».
+#[tauri::command]
+pub fn resolve_decision(state: State<AppState>, id: String, resolution: Option<String>, discard: bool) -> Res<Decision> {
+    let dir = state.store().root().to_path_buf();
+    let text = if discard { Some("Descartada".to_string()) } else { resolution };
+    decisions::resolve(&dir, &id, text.as_deref(), "tablero", &decisions::now()).map_err(err)
+}
+
+#[tauri::command]
+pub fn reopen_decision(state: State<AppState>, id: String) -> Res<Decision> {
+    let dir = state.store().root().to_path_buf();
+    decisions::reopen(&dir, &id, &decisions::now()).map_err(err)
+}
+
+/// Abre el .md de una conversación con el programa predeterminado de Windows.
+#[tauri::command]
+pub fn open_decision_file(state: State<AppState>, id: String) -> Res<()> {
+    let dir = state.store().root().to_path_buf();
+    let path = decisions::file_path(&dir, &id).map_err(err)?;
+    std::process::Command::new("explorer").arg(&path).spawn().map_err(err)?;
+    Ok(())
 }
 
 /// Solo las sesiones activas: el tablero las consulta cada poco sin recargar todas las tareas,

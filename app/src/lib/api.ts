@@ -99,6 +99,8 @@ export interface Board {
   projects: ProjectSummary[];
   /** Reglas para CLAUDE.md que Claude sugirió y esperan tu decisión. */
   rules: RuleSuggestion[];
+  /** Conversaciones con decisiones (pendientes o tomadas), la actualizada más recientemente primero. */
+  decisions: DecisionFile[];
   /** Conversaciones de Claude Code con actividad reciente, la más reciente primero. */
   sessions: SessionInfo[];
   mcp_url: string | null;
@@ -191,6 +193,34 @@ export interface RuleDecision {
   added: boolean;
 }
 
+export interface Decision {
+  /** `<proyecto>/<archivo>#<n>`. */
+  id: string;
+  question: string;
+  context: string;
+  recommendation: string | null;
+  /** Cuándo se registró (UTC). */
+  created_at: string | null;
+  resolved: boolean;
+  resolution: string | null;
+  resolved_at: string | null;
+  /** «tablero» o «Claude». */
+  resolved_by: string | null;
+}
+
+/** Un .md de decisiones: una conversación de Claude Code. */
+export interface DecisionFile {
+  key: string;
+  path: string;
+  project: string;
+  session_id: string | null;
+  title: string;
+  summary: string;
+  created_at: string;
+  updated_at: string;
+  decisions: Decision[];
+}
+
 export type ShortcutAction = "capture" | "snip";
 
 export interface ShortcutsView {
@@ -248,6 +278,12 @@ export const api = {
   hideCapture: () => invoke<void>("hide_capture"),
   /** Aceptar escribe la regla (quizá retocada) en el CLAUDE.md del proyecto; descartar solo la marca. */
   decideRule: (id: number, accept: boolean, rule?: string) => invoke<RuleDecision>("decide_rule", { id, accept, rule: rule ?? null }),
+  /** Marca una decisión como tomada (con lo que se decidió) o la descarta. */
+  resolveDecision: (id: string, resolution: string | null, discard = false) =>
+    invoke<Decision>("resolve_decision", { id, resolution, discard }),
+  reopenDecision: (id: string) => invoke<Decision>("reopen_decision", { id }),
+  /** Abre el .md de la conversación con el programa predeterminado. */
+  openDecisionFile: (id: string) => invoke<void>("open_decision_file", { id }),
   /** Abre el dictado de Windows (Win+H) sobre el campo con el foco. */
   startDictation: () => invoke<void>("start_dictation"),
   getShortcuts: () => invoke<ShortcutsView>("get_shortcuts"),

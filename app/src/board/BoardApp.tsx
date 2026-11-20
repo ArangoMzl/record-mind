@@ -7,7 +7,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Plus, Search, Sparkles } from "lucide-react";
+import { LayoutGrid, MessageSquareText, Plus, Search, Sparkles } from "lucide-react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -37,6 +37,7 @@ import { Sidebar } from "./Sidebar";
 import { TaskContextMenu, type TaskAction } from "./TaskMenu";
 import { SettingsDialog } from "./SettingsDialog";
 import { RulesDialog } from "./RulesDialog";
+import { DecisionsView, type DecisionFilter } from "./DecisionsView";
 import { Toasts, type Toast } from "./Toasts";
 import { WindowControls } from "./WindowControls";
 
@@ -67,6 +68,33 @@ export function BoardApp() {
       localStorage.setItem("rm.period", p);
     } catch {}
   };
+  // Tablero o decisiones pendientes; se recuerda entre aperturas.
+  const [view, setViewState] = useState<"board" | "decisions">(() => {
+    try {
+      if (localStorage.getItem("rm.view") === "decisions") return "decisions";
+    } catch {}
+    return "board";
+  });
+  const setView = (v: "board" | "decisions") => {
+    setViewState(v);
+    try {
+      localStorage.setItem("rm.view", v);
+    } catch {}
+  };
+  const [decisionFilter, setDecisionFilterState] = useState<DecisionFilter>(() => {
+    try {
+      if (localStorage.getItem("rm.decisions.filter") === "all") return "all";
+    } catch {}
+    return "open";
+  });
+  const setDecisionFilter = (f: DecisionFilter) => {
+    setDecisionFilterState(f);
+    try {
+      localStorage.setItem("rm.decisions.filter", f);
+    } catch {}
+  };
+  // Decisiones ya vistas, para avisar solo de las que Claude acaba de registrar.
+  const seenDecisions = useRef<Set<string> | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
   const [dragging, setDragging] = useState<TaskCard | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -109,6 +137,17 @@ export function BoardApp() {
         }
       }
       seenRules.current = new Set(b.rules.map((r) => r.id));
+      const openDecisions = b.decisions.flatMap((f) => f.decisions.filter((d) => !d.resolved).map((d) => ({ f, d })));
+      if (seenDecisions.current) {
+        const fresh = openDecisions.filter(({ d }) => !seenDecisions.current!.has(d.id));
+        if (fresh.length > 0)
+          pushToast({
+            tone: "review",
+            title: fresh.length === 1 ? `Nueva decisión pendiente en ${fresh[0].f.project}` : `${fresh.length} decisiones pendientes nuevas`,
+            body: fresh.length === 1 ? fresh[0].d.question : fresh[0].f.title,
+          });
+      }
+      seenDecisions.current = new Set(b.decisions.flatMap((f) => f.decisions.map((d) => d.id)));
       setBoard(b);
       setError(null);
     } catch (e) {
@@ -209,6 +248,21 @@ export function BoardApp() {
         (!q || t.title.toLowerCase().includes(q) || t.note.toLowerCase().includes(q) || `#${t.id}` === q),
     );
   }, [board, project, query, period]);
+
+  const decisionFiles = useMemo(() => {
+    if (!board) return [];
+    const q = query.trim().toLowerCase();
+    const has = (s: string | null) => !!s && s.toLowerCase().includes(q);
+    return board.decisions
+      .filter((f) => !project || f.project === project)
+      .map((f) =>
+        !q || has(f.title) || has(f.summary)
+          ? f
+          : { ...f, decisions: f.decisions.filter((d) => has(d.question) || has(d.context) || has(d.recommendation) || has(d.resolution)) },
+      )
+      .filter((f) => f.decisions.length > 0);
+  }, [board, project, query]);
+  const openDecisions = decisionFiles.reduce((n, f) => n + f.decisions.filter((d) => !d.resolved).length, 0);
 
   const byStatus = useMemo(() => {
     const m: Record<Status, TaskCard[]> = { inbox: [], in_progress: [], review: [], done: [] };
@@ -343,6 +397,8 @@ export function BoardApp() {
         onProject={setProject}
         onSettings={() => setSettingsOpen(true)}
         onRules={() => setRulesOpen(true)}
+        view={view}
+        onView={setView}
         update={update}
         onUpdate={openUpdate}
       />
@@ -354,18 +410,23 @@ export function BoardApp() {
             <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
               <span data-tauri-drag-region className="eyebrow shrink-0">
                 {project ? "Proyecto" : "Todos los proyectos"}
-                {period !== "all" && <span className="text-accent"> · {periodInfo.label}</span>}
+                {view === "board" && period !== "all" && <span className="text-accent"> · {periodInfo.label}</span>}
               </span>
               {projectBranch && <BranchTag branch={projectBranch} size="md" className="text-ink-2" />}
             </div>
             <h1 data-tauri-drag-region className="truncate text-[19px] font-semibold tracking-tight">
-              {project ?? "Tablero"}
-              {reviewCount > 0 && (
+              {project ?? (view === "decisions" ? "Decisiones" : "Tablero")}
+              {view === "decisions" && openDecisions > 0 && (
+                <span className="ml-3 align-middle text-[12px] font-medium text-st-review">
+                  {openDecisions} por decidir
+                </span>
+              )}
+              {view === "board" && reviewCount > 0 && (
                 <span className="ml-3 align-middle text-[12px] font-medium text-st-review">
                   {reviewCount} para revisar
                 </span>
               )}
-              {period !== "all" && byStatus.done.length > 0 && (
+              {view === "board" && period !== "all" && byStatus.done.length > 0 && (
                 <span className="ml-3 align-middle text-[12px] font-medium text-st-done">
                   {byStatus.done.length} {byStatus.done.length === 1 ? "aprobada" : "aprobadas"}
                 </span>
@@ -373,29 +434,78 @@ export function BoardApp() {
             </h1>
           </div>
           <div data-tauri-drag-region className="flex-1 self-stretch" />
-          <div role="radiogroup" aria-label="Periodo" className="flex shrink-0 rounded-xl border border-line bg-surface/80 p-0.5">
-            {PERIODS.map((p) => (
+          <div role="tablist" aria-label="Vista" className="flex shrink-0 rounded-xl border border-line bg-surface/80 p-0.5">
+            {(
+              [
+                { id: "board", label: "Tablero", icon: <LayoutGrid size={13} />, hint: "Los pendientes del tablero" },
+                { id: "decisions", label: "Decisiones", icon: <MessageSquareText size={13} />, hint: "Lo que quedó por decidir en tus conversaciones con Claude" },
+              ] as const
+            ).map((v) => (
               <button
-                key={p.id}
-                role="radio"
-                aria-checked={period === p.id}
-                onClick={() => setPeriod(p.id)}
-                title={p.hint}
-                className={`rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition ${
-                  period === p.id ? "bg-accent-soft text-accent" : "text-ink-3 hover:text-ink"
+                key={v.id}
+                role="tab"
+                aria-selected={view === v.id}
+                onClick={() => setView(v.id)}
+                title={v.hint}
+                className={`flex items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition ${
+                  view === v.id ? "bg-white/[0.08] text-ink" : "text-ink-3 hover:text-ink"
                 }`}
               >
-                {p.label}
+                {v.icon}
+                <span className="max-xl:hidden">{v.label}</span>
+                {v.id === "decisions" && openDecisions > 0 && (
+                  <span className="rounded-full bg-st-review/20 px-1.5 font-mono text-[10.5px] text-st-review">{openDecisions}</span>
+                )}
               </button>
             ))}
           </div>
+          {view === "board" ? (
+            <div role="radiogroup" aria-label="Periodo" className="flex shrink-0 rounded-xl border border-line bg-surface/80 p-0.5">
+              {PERIODS.map((p) => (
+                <button
+                  key={p.id}
+                  role="radio"
+                  aria-checked={period === p.id}
+                  onClick={() => setPeriod(p.id)}
+                  title={p.hint}
+                  className={`rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition ${
+                    period === p.id ? "bg-accent-soft text-accent" : "text-ink-3 hover:text-ink"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div role="radiogroup" aria-label="Qué decisiones mostrar" className="flex shrink-0 rounded-xl border border-line bg-surface/80 p-0.5">
+              {(
+                [
+                  { id: "open", label: "Abiertas", hint: "Solo las que faltan por decidir" },
+                  { id: "all", label: "Todas", hint: "También las ya tomadas" },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  role="radio"
+                  aria-checked={decisionFilter === f.id}
+                  onClick={() => setDecisionFilter(f.id)}
+                  title={f.hint}
+                  className={`rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition ${
+                    decisionFilter === f.id ? "bg-accent-soft text-accent" : "text-ink-3 hover:text-ink"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="flex w-72 min-w-0 shrink items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50">
             <Search size={15} />
             <input
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar pendientes"
+              placeholder={view === "decisions" ? "Buscar decisiones" : "Buscar pendientes"}
               className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3"
             />
             <span className="kbd max-lg:hidden">Ctrl K</span>
@@ -434,6 +544,16 @@ export function BoardApp() {
           </div>
         )}
 
+        {view === "decisions" ? (
+          <DecisionsView
+            files={decisionFiles}
+            filter={decisionFilter}
+            showProject={!project}
+            empty={board !== null && board.decisions.length === 0}
+            onToast={pushToast}
+            onChanged={refresh}
+          />
+        ) : (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
           <LayoutGroup>
             {/* El mínimo va en la pista y no en la columna: si no caben, se desplaza en horizontal en vez de solaparse. */}
@@ -463,6 +583,7 @@ export function BoardApp() {
             {dragging && <CardView task={dragging} showProject={!project} overlay />}
           </DragOverlay>
         </DndContext>
+        )}
       </div>
 
       <AnimatePresence>

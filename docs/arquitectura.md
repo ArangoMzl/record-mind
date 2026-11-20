@@ -112,6 +112,27 @@ proyecto, pero solo con su aprobación.
    si no existe. El resto del archivo no se toca, se respetan los finales de línea y una regla
    que ya está no se duplica.
 
+## Decisiones pendientes
+
+`rm_core::decisions`. Lo que una conversación deja por decidir no vive en la base: cada
+conversación es un `.md` en `~/.record-mind/decisiones/<proyecto>/<fecha>-<sesión>.md`, legible y
+editable fuera de la app.
+
+- **Formato**: cabecera (`proyecto`, `sesion`, `titulo`, `creado`, `actualizado`), `## Resumen` y
+  `## Decisiones` con una casilla por decisión (`- [ ]` abierta, `- [x]` tomada) y líneas sangradas
+  de contexto, `Recomendación:`, `Registrada:`, `Decisión:` y `Decidida: <fecha> · <quién>`.
+  record-mind reescribe el archivo entero con este formato cada vez que lo cambia, así que lo que
+  se añada a mano fuera de esas secciones se pierde.
+- **Quién escribe**: Claude con `/decisiones` (`record_decisions`, `resolve_decision`) y la
+  persona desde la pestaña «Decisiones» (tomar con o sin nota, descartar, reabrir). El id de una
+  decisión es su posición en el archivo (`<proyecto>/<archivo>#<n>`): solo se añaden al final.
+- **Una conversación, un archivo**: se reconoce por `sesion`. Volver a correr `/decisiones`
+  actualiza el mismo archivo y no repite preguntas. Sin `session_id`, el MCP usa la conversación
+  del proyecto con actividad más reciente.
+- **En vivo**: el vigilante revisa la carpeta cada ~1,2 s (nombre, tamaño y fecha de cada `.md`) y
+  emite el mismo `tasks:changed` que la base.
+- Las decisiones con más de 3 días abiertas se resaltan en ámbar para que no se olviden.
+
 ## Dictado por voz
 
 El botón **Dictar** de la captura pone el cursor al final de la nota y pulsa `Win+H` con

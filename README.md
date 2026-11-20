@@ -62,6 +62,12 @@ y las deja **para que tú las revises**. Nunca se marcan como hechas sin tu apro
   las tareas que devolviste y lo que se repite entre ellas. Si ve un error que vuelve, te propone
   una regla en **«Reglas sugeridas»**; la editas si quieres y con «Añadir a CLAUDE.md» queda
   escrita en el `CLAUDE.md` del proyecto. Claude nunca lo edita por su cuenta.
+- **Decisiones que no se olvidan**: en una conversación larga quedan cosas por decidir y la
+  conversación sigue. Escribe **`/decisiones`** y Claude las deja en la pestaña **«Decisiones»**
+  con un resumen, su contexto y lo que recomienda; cierra las que ya se resolvieron (también las de
+  otras conversaciones) y convierte la deuda técnica en capturas. Cada conversación es un `.md` en
+  `~/.record-mind/decisiones`; marcas las tomadas con un clic y las que llevan días abiertas
+  resaltan.
 - **Dictado por voz**: el botón **Dictar** de la captura abre el dictado de Windows (`Win+H`)
   sobre la nota.
 - **Ligera**: núcleo en Rust, instalador de ~4 MB, vive en la bandeja del sistema y puede
@@ -100,9 +106,9 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 1. **App**: descarga `record-mind_<versión>_x64-setup.exe` desde
    [Releases](../../releases) y ábrelo con **doble clic** desde el Explorador. Al abrirse, la app
    se conecta sola con Claude Code: registra su MCP (`http://127.0.0.1:4545/mcp`) en
-   `~/.claude.json` e instala la skill `/pendientes` en `~/.claude/skills/pendientes`. No toca un
+   `~/.claude.json` e instala las skills `/pendientes` y `/decisiones` en `~/.claude/skills`. No toca un
    `record-mind` que ya tengas registrado, ni una skill que hayas editado, y si quitas cualquiera
-   de los dos no los vuelve a poner. Reinicia Claude Code si estaba abierto.
+   de ellos no los vuelve a poner. Reinicia Claude Code si estaba abierto.
 2. **Opcional, CLI / servidor MCP por stdio** (funciona aunque la app esté cerrada): descarga
    `record-mind.exe` del mismo release (o compílalo, ver abajo), déjalo en una carpeta de tu `PATH`
    y regístralo en lugar del de la app:
@@ -112,7 +118,7 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
    claude mcp add -s user record-mind -- "C:/ruta/a/record-mind.exe" mcp
    ```
 
-   A mano, la skill está en [`claude/skills/pendientes`](claude/skills/pendientes).
+   A mano, las skills están en [`claude/skills`](claude/skills).
 
 > [!IMPORTANT]
 > No instales ni lances la app desde una terminal de **Claude Desktop**. Es una app empaquetada
@@ -129,6 +135,8 @@ Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 | `/pendientes` (sin marcas) | Te muestra las tareas y eliges una, varias o todas |
 | `/pendientes 4 7` | Solo la #4 y la #7 |
 | `/pendientes todas` | Todas las capturadas del proyecto |
+| `/decisiones` | Registra lo que quedó por decidir en la conversación y cierra lo ya resuelto |
+| `/decisiones revisar` | Solo cierra las decisiones abiertas que ya se resolvieron |
 
 ### Atajos
 
@@ -186,7 +194,7 @@ crates/mcp               servidor MCP (rmcp): stdio y Streamable HTTP
 crates/cli               binario `record-mind` (CLI + MCP por stdio)
 app/src-tauri            app de escritorio (Rust, Tauri 2)
 app/src                  interfaz (React 19, TypeScript, Tailwind 4, dnd-kit, Motion)
-claude/skills/pendientes skill /pendientes para Claude Code
+claude/skills            skills /pendientes y /decisiones para Claude Code
 site/                    página de presentación
 docs/                    documentación
 ```

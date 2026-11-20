@@ -2,6 +2,7 @@
 
 pub mod claude_code;
 pub mod claude_setup;
+pub mod decisions;
 pub mod engram;
 pub mod git;
 pub mod model;
@@ -12,6 +13,7 @@ pub mod store;
 pub mod text;
 
 pub use claude_code::{KnownProject, ProjectSummary};
+pub use decisions::{Decision, DecisionFile};
 pub use rules::{Patterns, RuleSuggestion};
 pub use engram::{EngramReader, Memory, SessionInfo};
 pub use model::{Attachment, MemoryLink, MemoryRelation, NewTask, Status, Task, TaskDetail, TaskEvent};

@@ -1,6 +1,6 @@
 //! Conecta record-mind con Claude Code sin pasos a mano: registra el MCP de la app en la
-//! configuración de usuario (lo mismo que `claude mcp add -s user`) e instala la skill
-//! `/pendientes`. La app lo hace al arrancar, así que basta con instalarla.
+//! configuración de usuario (lo mismo que `claude mcp add -s user`) e instala las skills
+//! `/pendientes` y `/decisiones`. La app lo hace al arrancar, así que basta con instalarla.
 //!
 //! Respeta lo que decida la persona: si quita el MCP o borra o edita la skill, no se vuelve a
 //! tocar. Para saberlo guarda en `settings.json` lo que ya hizo ([`ClaudeSetup`]).
@@ -15,8 +15,10 @@ use crate::settings::Settings;
 /// Nombre del servidor en `mcpServers` y de la carpeta de la skill.
 pub const SERVER_NAME: &str = "record-mind";
 const SKILL_NAME: &str = "pendientes";
+const DECISIONS_SKILL_NAME: &str = "decisiones";
 /// La skill va dentro del binario: siempre coincide con la versión de la app.
 pub const SKILL: &str = include_str!("../../../claude/skills/pendientes/SKILL.md");
+pub const DECISIONS_SKILL: &str = include_str!("../../../claude/skills/decisiones/SKILL.md");
 
 /// Lo que ya se hizo en la configuración de Claude Code, para no deshacer lo que cambie la persona.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -27,6 +29,8 @@ pub struct ClaudeSetup {
     /// Huella de la última skill que instaló la app. Si el archivo sigue igual se puede
     /// actualizar; si cambió es de la persona.
     pub skill_hash: Option<String>,
+    /// Lo mismo para la skill `/decisiones`.
+    pub decisions_skill_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +51,7 @@ pub enum Outcome {
 pub struct Report {
     pub mcp: crate::Result<Outcome>,
     pub skill: crate::Result<Outcome>,
+    pub decisions_skill: crate::Result<Outcome>,
 }
 
 /// Carpeta de Claude Code: `$CLAUDE_CONFIG_DIR` o `~/.claude`.
@@ -62,11 +67,12 @@ pub fn ensure(data_dir: &Path, mcp_url: &str) -> Report {
     let mut settings = Settings::load(data_dir);
     let before = settings.claude.clone();
     let (Some(config), Some(claude)) = (crate::claude_code::config_path(), claude_dir()) else {
-        return Report { mcp: Ok(Outcome::NoClaude), skill: Ok(Outcome::NoClaude) };
+        return Report { mcp: Ok(Outcome::NoClaude), skill: Ok(Outcome::NoClaude), decisions_skill: Ok(Outcome::NoClaude) };
     };
     let report = Report {
         mcp: ensure_mcp(&config, mcp_url, &mut settings.claude),
-        skill: ensure_skill(&claude, &mut settings.claude),
+        skill: ensure_skill(&claude, SKILL_NAME, SKILL, &mut settings.claude.skill_hash),
+        decisions_skill: ensure_skill(&claude, DECISIONS_SKILL_NAME, DECISIONS_SKILL, &mut settings.claude.decisions_skill_hash),
     };
     if settings.claude != before {
         if let Err(e) = settings.save(data_dir) {
@@ -103,33 +109,34 @@ pub fn ensure_mcp(config: &Path, url: &str, state: &mut ClaudeSetup) -> crate::R
     Ok(Outcome::Installed)
 }
 
-/// Instala o actualiza `skills/pendientes/SKILL.md` dentro de la carpeta de Claude Code.
-pub fn ensure_skill(claude_dir: &Path, state: &mut ClaudeSetup) -> crate::Result<Outcome> {
-    let path = claude_dir.join("skills").join(SKILL_NAME).join("SKILL.md");
-    let ours = fingerprint(SKILL);
+/// Instala o actualiza `skills/<name>/SKILL.md` dentro de la carpeta de Claude Code. `hash` es la
+/// huella de la última versión que instaló la app (ver [`ClaudeSetup`]).
+pub fn ensure_skill(claude_dir: &Path, name: &str, skill: &str, hash: &mut Option<String>) -> crate::Result<Outcome> {
+    let path = claude_dir.join("skills").join(name).join("SKILL.md");
+    let ours = fingerprint(skill);
     match std::fs::read_to_string(&path) {
         Ok(current) => {
             let theirs = fingerprint(&current);
             if theirs == ours {
-                state.skill_hash = Some(ours);
+                *hash = Some(ours);
                 Ok(Outcome::Present)
-            } else if state.skill_hash.as_deref() == Some(theirs.as_str()) {
-                write_atomic(&path, SKILL.as_bytes())?;
-                state.skill_hash = Some(ours);
+            } else if hash.as_deref() == Some(theirs.as_str()) {
+                write_atomic(&path, skill.as_bytes())?;
+                *hash = Some(ours);
                 Ok(Outcome::Updated)
             } else {
                 Ok(Outcome::LeftAlone)
             }
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            if state.skill_hash.is_some() {
+            if hash.is_some() {
                 Ok(Outcome::LeftAlone)
             } else if !claude_dir.is_dir() {
                 Ok(Outcome::NoClaude)
             } else {
                 std::fs::create_dir_all(path.parent().expect("la ruta tiene carpeta"))?;
-                write_atomic(&path, SKILL.as_bytes())?;
-                state.skill_hash = Some(ours);
+                write_atomic(&path, skill.as_bytes())?;
+                *hash = Some(ours);
                 Ok(Outcome::Installed)
             }
         }
@@ -239,34 +246,41 @@ mod tests {
         let mut state = ClaudeSetup::default();
 
         // Sin carpeta de Claude Code no se instala.
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::NoClaude);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::NoClaude);
 
         std::fs::create_dir_all(&claude).unwrap();
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::Installed);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::Installed);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), SKILL);
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::Present);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::Present);
 
         // Una versión anterior instalada por la app (sin tocar) se actualiza.
         let old = "versión vieja\n";
         std::fs::write(&path, old).unwrap();
         state.skill_hash = Some(fingerprint(old));
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::Updated);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::Updated);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), SKILL);
 
         // Editada por la persona: se deja.
         std::fs::write(&path, "mi versión\n").unwrap();
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::LeftAlone);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::LeftAlone);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "mi versión\n");
 
         // Borrada después de instalarla: no vuelve.
         std::fs::remove_file(&path).unwrap();
-        assert_eq!(ensure_skill(&claude, &mut state).unwrap(), Outcome::LeftAlone);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut state.skill_hash).unwrap(), Outcome::LeftAlone);
         assert!(!path.exists());
 
         // La misma skill con CRLF cuenta como igual.
         let crlf = SKILL.replace("\r\n", "\n").replace('\n', "\r\n");
         std::fs::write(&path, &crlf).unwrap();
-        assert_eq!(ensure_skill(&claude, &mut ClaudeSetup::default()).unwrap(), Outcome::Present);
+        assert_eq!(ensure_skill(&claude, SKILL_NAME, SKILL, &mut None).unwrap(), Outcome::Present);
+
+        // La de decisiones va en su carpeta, con su propia huella.
+        let mut decisions = None;
+        assert_eq!(ensure_skill(&claude, DECISIONS_SKILL_NAME, DECISIONS_SKILL, &mut decisions).unwrap(), Outcome::Installed);
+        let other = claude.join("skills").join("decisiones").join("SKILL.md");
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), DECISIONS_SKILL);
+        assert_ne!(decisions, state.skill_hash);
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

@@ -124,6 +124,40 @@ La regla queda **pendiente** en «Reglas sugeridas» del tablero. No acepta regl
 repetidas en el proyecto. Solo cuando el usuario la acepta, la app la añade al `CLAUDE.md` del
 proyecto, en la sección «Reglas aprendidas (record-mind)». Claude nunca edita `CLAUDE.md`.
 
+### `list_decisions`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cwd` / `project` | string? | Proyecto (uno de los dos) |
+| `include_resolved` | bool? | `true` = también las ya tomadas (por defecto solo las abiertas) |
+
+Decisiones que quedaron pendientes en conversaciones del proyecto, agrupadas por conversación y
+cada una con su `id` (`<proyecto>/<archivo>#<n>`).
+
+### `record_decisions`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `cwd` / `project` | string? | Proyecto (uno de los dos) |
+| `session_id` | string? | Conversación de Claude Code; si falta, la del proyecto con actividad más reciente |
+| `title` | string | De qué trató la conversación |
+| `summary` | string | Qué se hizo y qué quedó a medias |
+| `decisions` | `{question, context?, recommendation?}[]` | Lo que el usuario debe decidir |
+
+Escribe `~/.record-mind/decisiones/<proyecto>/<fecha>-<sesión>.md`. Si la conversación ya tenía
+archivo, lo actualiza: cambia título y resumen y añade solo las preguntas nuevas (compara sin
+mayúsculas ni signos). Sin decisiones no crea archivo.
+
+### `resolve_decision`
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `id` | string | Id de `list_decisions` |
+| `decision` | string | Qué se decidió, en una frase |
+
+Marca la casilla (`- [x]`) y anota la decisión, la fecha y que la tomó Claude. Sirve para cerrar
+desde una conversación lo que quedó abierto en otra.
+
 ## El flujo de `/pendientes`
 
 El skill ([`claude/skills/pendientes/SKILL.md`](../claude/skills/pendientes/SKILL.md)) le indica a
@@ -138,6 +172,20 @@ Claude:
 4. **Errores que se repiten**: `find_patterns` y, si hay evidencia clara, `suggest_rule`.
    Con `/pendientes reglas` hace solo este paso.
 5. Un resumen final con una línea por tarea y las reglas sugeridas.
+
+## El flujo de `/decisiones`
+
+El skill ([`claude/skills/decisiones/SKILL.md`](../claude/skills/decisiones/SKILL.md)) le indica a
+Claude:
+
+1. `list_decisions` para ver lo que ya hay abierto en el proyecto.
+2. `resolve_decision` para las que quedaron resueltas en esta conversación.
+3. Buscar lo nuevo por decidir (preguntas sin respuesta, cosas que eligió por defecto, opciones
+   aplazadas) y registrarlo con un solo `record_decisions`. Las deudas técnicas no son decisiones:
+   van como capturas con `create_task`.
+4. Un resumen con lo que quedó abierto, lo que cerró y las capturas creadas.
+
+Con `/decisiones revisar` hace solo los pasos 1 y 2.
 
 ## Probar el servidor a mano
 

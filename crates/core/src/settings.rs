@@ -75,7 +75,7 @@ mod tests {
 
         let s = Settings {
             shortcuts: Shortcuts { capture: "Alt+KeyQ".into(), snip: Some("CommandOrControl+Alt+KeyS".into()) },
-            claude: crate::claude_setup::ClaudeSetup { mcp_registered: true, skill_hash: Some("abc".into()) },
+            claude: crate::claude_setup::ClaudeSetup { mcp_registered: true, skill_hash: Some("abc".into()), decisions_skill_hash: None },
         };
         s.save(&dir).unwrap();
         assert_eq!(Settings::load(&dir), s);
