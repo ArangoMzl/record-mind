@@ -263,6 +263,16 @@ export const STATUSES: { id: Status; label: string; hint: string; color: string 
 
 export const statusLabel = (s: Status) => STATUSES.find((x) => x.id === s)!.label;
 
+/**
+ * Lo único que se mueve a mano es Para revisar ↔ Hecho. Capturado y «Claude trabajando»
+ * los mueve Claude; para devolver una tarea a Capturado está «Devolver con nota».
+ */
+export const canMove = (from: Status, to: Status) =>
+  (from === "review" && to === "done") || (from === "done" && to === "review");
+
+/** Si una tarjeta en este estado se puede arrastrar o mover a mano. */
+export const isMovable = (s: Status) => s === "review" || s === "done";
+
 /** Fechas de SQLite/Engram ("2026-11-13 21:36:48" o ISO) → Date en UTC. */
 export function parseDate(s: string): Date {
   const iso = s.includes("T") ? s : s.replace(" ", "T");

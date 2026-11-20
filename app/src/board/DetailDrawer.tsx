@@ -16,13 +16,11 @@ import { Menu, WorkingLabel, type MenuItem } from "./Menu";
 import type { Toast } from "./Toasts";
 
 const MOVE_TARGETS: Record<Status, MenuItem[]> = {
-  inbox: [
-    { id: "review", label: "Para revisar", hint: "Ya está resuelta, falta revisarla", color: "var(--color-st-review)" },
-    { id: "done", label: "Hecho", hint: "La resolviste tú, sin Claude", color: "var(--color-st-done)" },
-  ],
+  // Solo Para revisar ↔ Hecho (ver canMove). Pasar a Hecho desde revisión es «Aprobar».
+  inbox: [],
   in_progress: [],
-  review: [{ id: "inbox", label: "Capturado", hint: "Vuelve a la cola de Claude, sin nota", color: "var(--color-st-inbox)" }],
-  done: [],
+  review: [],
+  done: [{ id: "review", label: "Para revisar", hint: "Vuelve a revisión, sin nota", color: "var(--color-st-review)" }],
 };
 
 export function DetailDrawer(props: {

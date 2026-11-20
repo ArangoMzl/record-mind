@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { PRIORITIES, STATUSES, type Status, type TaskCard } from "../lib/api";
+import { canMove, isMovable, PRIORITIES, STATUSES, type Status, type TaskCard } from "../lib/api";
 
 export type TaskAction =
   | { kind: "open" }
@@ -92,12 +92,11 @@ function buildEntries(t: TaskCard): Entry[] {
       key: "A",
       action: { kind: "approve" },
     },
-    {
+    isMovable(t.status) && {
       id: "move",
       label: "Mover a",
       icon: <ArrowRightLeft size={14} />,
-      disabled: inProgress ? "Está en curso: libérala desde el detalle" : undefined,
-      children: STATUSES.filter((s) => s.id !== t.status && s.id !== "in_progress").map((s) => ({
+      children: STATUSES.filter((s) => canMove(t.status, s.id)).map((s) => ({
         id: `m-${s.id}`,
         label: s.id === "done" && t.status === "review" ? "Hecho (aprobar)" : s.label,
         icon: <span className="m-[3px] size-2 rounded-full" style={{ background: s.color, boxShadow: `0 0 8px ${s.color}` }} />,

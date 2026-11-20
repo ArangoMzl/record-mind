@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { STATUSES, TaskCard } from "../lib/api";
+import { isMovable, type STATUSES, type TaskCard } from "../lib/api";
 import { CardView } from "./TaskCardView";
 
 type StatusInfo = (typeof STATUSES)[number];
@@ -39,12 +39,21 @@ export function Column(props: {
     >
       {showLock && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-base/80 p-6 text-center backdrop-blur-[2px]">
-          <div>
-            <div className="text-[13px] font-medium">Solo Claude mueve tareas aquí</div>
-            <div className="mt-1 text-[12px] text-ink-3">
-              Las toma cuando escribes <span className="kbd">/pendientes</span> en su sesión
+          {status.id === "inbox" ? (
+            <div>
+              <div className="text-[13px] font-medium">No se arrastra a Capturado</div>
+              <div className="mt-1 text-[12px] text-ink-3">
+                Ábrela y usa <span className="text-ink-2">Devolver con nota</span> para que Claude sepa qué falta
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <div className="text-[13px] font-medium">Solo Claude mueve tareas aquí</div>
+              <div className="mt-1 text-[12px] text-ink-3">
+                Las toma cuando escribes <span className="kbd">/pendientes</span> en su sesión
+              </div>
+            </div>
+          )}
         </div>
       )}
       <header className="flex items-center gap-2.5 px-4 pt-3.5 pb-3 whitespace-nowrap" title={status.hint}>
@@ -125,10 +134,10 @@ function DraggableCard(props: {
   onContextMenu: (task: TaskCard, x: number, y: number) => void;
   menuOpen: boolean;
 }) {
-  // Mientras un agente la trabaja no se puede arrastrar (se libera desde el detalle).
+  // Solo se arrastra entre Para revisar y Hecho: Capturado y «Claude trabajando» los mueve Claude.
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: props.task.id,
-    disabled: props.task.status === "in_progress",
+    disabled: !isMovable(props.task.status),
   });
   return (
     <motion.div

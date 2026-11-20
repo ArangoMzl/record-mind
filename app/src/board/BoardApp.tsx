@@ -12,6 +12,8 @@ import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  canMove,
+  isMovable,
   onTasksChanged,
   shortcutLabel,
   STATUSES,
@@ -204,7 +206,7 @@ export function BoardApp() {
 
   /** Mover a mano (arrastrar o menú). Optimista: se mueve ya y se corrige si falla. */
   const moveTask = async (task: TaskCard, to: Status) => {
-    if (task.status === to || to === "in_progress" || task.status === "in_progress") return;
+    if (!canMove(task.status, to)) return;
     setBoard((b) => b && { ...b, tasks: b.tasks.map((t) => (t.id === task.id ? { ...t, status: to } : t)) });
     if (prev.current) prev.current.set(task.id, { ...task, status: to });
     try {
@@ -398,7 +400,7 @@ export function BoardApp() {
                   tasks={byStatus[s.id]}
                   showProject={!project}
                   draggingId={dragging?.id ?? null}
-                  locked={s.id === "in_progress"}
+                  locked={dragging ? dragging.status !== s.id && !canMove(dragging.status, s.id) : !isMovable(s.id)}
                   onOpen={setOpenId}
                   onApprove={quickApprove}
                   onToggleQueue={(t) => setQueued([t.id], !t.queued)}

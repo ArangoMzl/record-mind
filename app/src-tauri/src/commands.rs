@@ -323,7 +323,14 @@ pub fn create_task(state: State<AppState>, input: CaptureInput) -> Res<Task> {
 #[tauri::command]
 pub fn move_task(state: State<AppState>, id: i64, status: String) -> Res<Task> {
     let to: Status = status.parse().map_err(err)?;
-    state.store().move_to(id, to, "user").map_err(err)
+    let mut store = state.store();
+    // A mano solo se mueve entre Para revisar y Hecho; el resto de transiciones son de Claude
+    // (o de «Devolver con nota», que va por reopen_task).
+    let from = store.task(id).map_err(err)?.status;
+    if !matches!((from, to), (Status::Review, Status::Done) | (Status::Done, Status::Review)) {
+        return Err("solo se puede mover entre Para revisar y Hecho".into());
+    }
+    store.move_to(id, to, "user").map_err(err)
 }
 
 #[tauri::command]
