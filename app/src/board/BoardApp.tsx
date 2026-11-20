@@ -7,7 +7,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Sparkles } from "lucide-react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -20,7 +20,9 @@ import {
   type Task,
   type TaskCard,
   type TaskEdit,
+  type UpdateInfo,
 } from "../lib/api";
+import { UpdateDialog } from "./UpdateDialog";
 import { Column } from "./Column";
 import { CardView } from "./TaskCardView";
 import { DetailDrawer } from "./DetailDrawer";
@@ -38,6 +40,8 @@ export function BoardApp() {
   const [project, setProject] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
   // Reglas ya vistas, para avisar solo de las que Claude acaba de sugerir.
   const seenRules = useRef<Set<number> | null>(null);
   const [query, setQuery] = useState("");
@@ -105,6 +109,46 @@ export function BoardApp() {
       clearInterval(tick);
     };
   }, [refresh]);
+
+  /** Consulta las releases de GitHub; avisa una sola vez por versión nueva. Sin red, se calla. */
+  const checkUpdate = useCallback(
+    async (quiet: boolean) => {
+      try {
+        const info = await api.checkUpdate();
+        setUpdate(info);
+        const newest = info.releases[0];
+        if (!newest) return;
+        let notified: string | null = null;
+        try {
+          notified = localStorage.getItem("rm.update.notified");
+        } catch {}
+        if (notified !== newest.version) {
+          pushToast({ tone: "progress", title: `record-mind ${newest.version} disponible`, body: "Mira las novedades en la cabecera del tablero." });
+          try {
+            localStorage.setItem("rm.update.notified", newest.version);
+          } catch {}
+        }
+      } catch (err) {
+        if (!quiet) pushToast({ tone: "error", title: "No se pudo buscar actualizaciones", body: String(err) });
+      }
+    },
+    [pushToast],
+  );
+
+  useEffect(() => {
+    // Al arrancar (sin estorbar la carga del tablero) y cada 6 h mientras siga abierta en la bandeja.
+    const first = setTimeout(() => checkUpdate(true), 4_000);
+    const every = setInterval(() => checkUpdate(true), 6 * 60 * 60 * 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [checkUpdate]);
+
+  const openUpdate = async () => {
+    if (!update) await checkUpdate(false);
+    setUpdateOpen(true);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -251,7 +295,15 @@ export function BoardApp() {
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
-      <Sidebar board={board} project={project} onProject={setProject} onSettings={() => setSettingsOpen(true)} onRules={() => setRulesOpen(true)} />
+      <Sidebar
+        board={board}
+        project={project}
+        onProject={setProject}
+        onSettings={() => setSettingsOpen(true)}
+        onRules={() => setRulesOpen(true)}
+        update={update}
+        onUpdate={openUpdate}
+      />
 
       <div className="flex min-h-0 flex-col">
         {/* La ventana no tiene marco: esta cabecera hace de barra de título (se arrastra y con doble clic maximiza). */}
@@ -279,6 +331,17 @@ export function BoardApp() {
             />
             <span className="kbd max-lg:hidden">Ctrl K</span>
           </label>
+          {update && update.releases.length > 0 && (
+            <button
+              onClick={() => setUpdateOpen(true)}
+              title={`Tienes la ${update.current}. Ver las novedades e instalar.`}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-accent/40 bg-accent-soft px-3 py-2 text-[12.5px] font-medium whitespace-nowrap text-accent transition hover:border-accent/70"
+            >
+              <Sparkles size={14} />
+              {update.releases[0].version}
+              <span className="max-xl:hidden">disponible</span>
+            </button>
+          )}
           <button
             onClick={() => api.openCapture()}
             className="flex shrink-0 items-center gap-2 rounded-xl bg-accent px-3.5 py-2 font-medium whitespace-nowrap text-white shadow-[0_0_24px_var(--color-accent-glow)] transition hover:brightness-110"
@@ -392,6 +455,10 @@ export function BoardApp() {
             }}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {updateOpen && update && <UpdateDialog info={update} onClose={() => setUpdateOpen(false)} onRecheck={() => checkUpdate(false)} />}
       </AnimatePresence>
 
       <Toasts toasts={toasts} />

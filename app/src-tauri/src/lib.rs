@@ -5,6 +5,7 @@ mod commands;
 mod dictation;
 mod shortcuts;
 mod snip;
+mod updates;
 mod watcher;
 
 use std::{
@@ -179,6 +180,7 @@ pub fn run() {
             snip: Mutex::default(),
             shortcuts: Mutex::default(),
         })
+        .manage(updates::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::board,
             commands::live_sessions,
@@ -209,6 +211,9 @@ pub fn run() {
             commands::take_snips,
             commands::open_board,
             commands::open_capture,
+            updates::check_update,
+            updates::install_update,
+            updates::open_url,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

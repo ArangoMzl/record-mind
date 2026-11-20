@@ -163,6 +163,29 @@ export interface ShortcutsView {
   snip_error: string | null;
 }
 
+export interface ReleaseNotes {
+  version: string;
+  name: string;
+  /** Cuerpo de la release en Markdown. */
+  notes: string;
+  url: string;
+  published_at: string;
+}
+
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  /** Versiones posteriores a la instalada, la más nueva primero (vacío si está al día). */
+  releases: ReleaseNotes[];
+  /** Instalador verificable de la más nueva; null si no hay o no trae SHA-256. */
+  installer: { name: string; url: string; size: number; sha256: string } | null;
+}
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number;
+}
+
 export const api = {
   board: () => invoke<Board>("board"),
   /** Conversaciones de Claude Code con actividad reciente (consulta ligera). */
@@ -203,7 +226,16 @@ export const api = {
   resizeCapture: (editing: boolean) => invoke<void>("resize_capture", { editing }),
   openBoard: () => invoke<void>("open_board"),
   openCapture: () => invoke<void>("open_capture"),
+  /** Consulta las releases de GitHub y las compara con la versión instalada. */
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  /** Descarga el instalador, comprueba su SHA-256, lo abre y cierra la app. */
+  installUpdate: () => invoke<void>("install_update"),
+  /** Abre un enlace https en el navegador (la webview no debe navegar fuera). */
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
 };
+
+export const onUpdateProgress = (cb: (p: UpdateProgress) => void): Promise<UnlistenFn> =>
+  listen<UpdateProgress>("update:progress", (e) => cb(e.payload));
 
 export const onTasksChanged = (cb: () => void): Promise<UnlistenFn> => listen("tasks:changed", cb);
 export const onCaptureOpen = (cb: () => void): Promise<UnlistenFn> => listen("capture:open", cb);

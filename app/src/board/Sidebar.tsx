@@ -1,5 +1,5 @@
-import { Brain, LayoutGrid, Lightbulb, Plug, Settings } from "lucide-react";
-import { shortcutLabel, timeAgo, type Board } from "../lib/api";
+import { Brain, LayoutGrid, Lightbulb, Plug, Settings, Sparkles } from "lucide-react";
+import { shortcutLabel, timeAgo, type Board, type UpdateInfo } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
 
 export function Sidebar({
@@ -8,13 +8,18 @@ export function Sidebar({
   onProject,
   onSettings,
   onRules,
+  update,
+  onUpdate,
 }: {
   board: Board | null;
   project: string | null;
   onProject: (p: string | null) => void;
   onSettings: () => void;
   onRules: () => void;
+  update: UpdateInfo | null;
+  onUpdate: () => void;
 }) {
+  const newer = update?.releases[0]?.version;
   const pendingRules = board?.rules.length ?? 0;
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
   // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
@@ -126,6 +131,15 @@ export function Sidebar({
         </button>
         <Status ok={!!board?.mcp_url} icon={<Plug size={12} />} label={board?.mcp_url ? "MCP en línea" : "MCP apagado"} title={board?.mcp_url ?? undefined} />
         <Status ok={!!board?.engram} icon={<Brain size={12} />} label={board?.engram ? "Engram conectado" : "Engram no encontrado"} />
+        <button
+          onClick={onUpdate}
+          title={newer ? "Ver las novedades e instalar" : "Buscar actualizaciones"}
+          className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-white/[0.05]"
+        >
+          <Sparkles size={12} className={newer ? "text-accent" : ""} />
+          <span className={newer ? "text-ink-2" : ""}>{newer ? `Actualizar a ${newer}` : update ? "Al día" : "Buscar actualizaciones"}</span>
+          <span className="ml-auto font-mono text-[10px]">v{update?.current ?? __APP_VERSION__}</span>
+        </button>
       </footer>
     </aside>
   );
