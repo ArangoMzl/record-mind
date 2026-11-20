@@ -13,11 +13,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   canMove,
+  inPeriod,
   isMovable,
   onTasksChanged,
+  PERIODS,
   shortcutLabel,
   STATUSES,
   type Board,
+  type Period,
   type Status,
   type Task,
   type TaskCard,
@@ -51,6 +54,19 @@ export function BoardApp() {
   // Reglas ya vistas, para avisar solo de las que Claude acaba de sugerir.
   const seenRules = useRef<Set<number> | null>(null);
   const [query, setQuery] = useState("");
+  const [period, setPeriodState] = useState<Period>(() => {
+    try {
+      const saved = localStorage.getItem("rm.period");
+      if (PERIODS.some((p) => p.id === saved)) return saved as Period;
+    } catch {}
+    return "all";
+  });
+  const setPeriod = (p: Period) => {
+    setPeriodState(p);
+    try {
+      localStorage.setItem("rm.period", p);
+    } catch {}
+  };
   const [openId, setOpenId] = useState<number | null>(null);
   const [dragging, setDragging] = useState<TaskCard | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -184,17 +200,21 @@ export function BoardApp() {
   const visible = useMemo(() => {
     if (!board) return [];
     const q = query.trim().toLowerCase();
+    // `now` se toma aquí: el tablero se repinta cada 30 s, así que al pasar la medianoche «Hoy» se pone al día solo.
+    const now = new Date();
     return board.tasks.filter(
       (t) =>
         (!project || t.project === project) &&
+        inPeriod(t, period, now) &&
         (!q || t.title.toLowerCase().includes(q) || t.note.toLowerCase().includes(q) || `#${t.id}` === q),
     );
-  }, [board, project, query]);
+  }, [board, project, query, period]);
 
   const byStatus = useMemo(() => {
     const m: Record<Status, TaskCard[]> = { inbox: [], in_progress: [], review: [], done: [] };
     for (const t of visible) m[t.status].push(t);
-    m.done.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    // Lo último aprobado arriba (por cuándo se aprobó, no por la última edición).
+    m.done.sort((a, b) => b.status_since.localeCompare(a.status_since));
     return m;
   }, [visible]);
 
@@ -207,8 +227,10 @@ export function BoardApp() {
   /** Mover a mano (arrastrar o menú). Optimista: se mueve ya y se corrige si falla. */
   const moveTask = async (task: TaskCard, to: Status) => {
     if (!canMove(task.status, to)) return;
-    setBoard((b) => b && { ...b, tasks: b.tasks.map((t) => (t.id === task.id ? { ...t, status: to } : t)) });
-    if (prev.current) prev.current.set(task.id, { ...task, status: to });
+    // Llega a la columna ahora: con el filtro «Hoy» no debe desaparecer mientras responde la base.
+    const moved = { ...task, status: to, status_since: new Date().toISOString() };
+    setBoard((b) => b && { ...b, tasks: b.tasks.map((t) => (t.id === task.id ? { ...t, ...moved } : t)) });
+    if (prev.current) prev.current.set(task.id, moved);
     try {
       if (to === "done" && task.status === "review") await api.approve(task.id);
       else await api.move(task.id, to);
@@ -311,6 +333,7 @@ export function BoardApp() {
   const shortcut = shortcutLabel(board?.shortcut ?? "CommandOrControl+Shift+Space");
   const reviewCount = byStatus.review.length;
   const projectBranch = project ? board?.projects.find((p) => p.name === project)?.branch : null;
+  const periodInfo = PERIODS.find((p) => p.id === period)!;
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
@@ -331,6 +354,7 @@ export function BoardApp() {
             <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
               <span data-tauri-drag-region className="eyebrow shrink-0">
                 {project ? "Proyecto" : "Todos los proyectos"}
+                {period !== "all" && <span className="text-accent"> · {periodInfo.label}</span>}
               </span>
               {projectBranch && <BranchTag branch={projectBranch} size="md" className="text-ink-2" />}
             </div>
@@ -341,9 +365,30 @@ export function BoardApp() {
                   {reviewCount} para revisar
                 </span>
               )}
+              {period !== "all" && byStatus.done.length > 0 && (
+                <span className="ml-3 align-middle text-[12px] font-medium text-st-done">
+                  {byStatus.done.length} {byStatus.done.length === 1 ? "aprobada" : "aprobadas"}
+                </span>
+              )}
             </h1>
           </div>
           <div data-tauri-drag-region className="flex-1 self-stretch" />
+          <div role="radiogroup" aria-label="Periodo" className="flex shrink-0 rounded-xl border border-line bg-surface/80 p-0.5">
+            {PERIODS.map((p) => (
+              <button
+                key={p.id}
+                role="radio"
+                aria-checked={period === p.id}
+                onClick={() => setPeriod(p.id)}
+                title={p.hint}
+                className={`rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition ${
+                  period === p.id ? "bg-accent-soft text-accent" : "text-ink-3 hover:text-ink"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <label className="flex w-72 min-w-0 shrink items-center gap-2 rounded-xl border border-line bg-surface/80 px-3 py-2 text-ink-2 focus-within:border-accent/50">
             <Search size={15} />
             <input
@@ -408,6 +453,7 @@ export function BoardApp() {
                   onContextMenu={(task, x, y) => setMenu({ task, x, y })}
                   menuId={menu?.task.id ?? null}
                   empty={board !== null && board.tasks.length === 0}
+                  periodPhrase={periodInfo.phrase}
                   shortcut={shortcut}
                 />
               ))}

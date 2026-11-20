@@ -22,6 +22,8 @@ export function Column(props: {
   menuId: number | null;
   empty: boolean;
   shortcut: string[];
+  /** «hoy», «ayer»… cuando el tablero está filtrado por periodo; vacío si no. */
+  periodPhrase?: string;
 }) {
   const { status, tasks } = props;
   const { setNodeRef, isOver } = useDroppable({ id: status.id, disabled: props.locked });
@@ -118,7 +120,9 @@ export function Column(props: {
             />
           ))}
         </AnimatePresence>
-        {tasks.length === 0 && <EmptyHint status={status.id} firstRun={props.empty} shortcut={props.shortcut} />}
+        {tasks.length === 0 && (
+          <EmptyHint status={status.id} firstRun={props.empty} shortcut={props.shortcut} periodPhrase={props.periodPhrase} />
+        )}
       </div>
     </section>
   );
@@ -167,7 +171,17 @@ function DraggableCard(props: {
   );
 }
 
-function EmptyHint({ status, firstRun, shortcut }: { status: string; firstRun: boolean; shortcut: string[] }) {
+function EmptyHint({
+  status,
+  firstRun,
+  shortcut,
+  periodPhrase,
+}: {
+  status: string;
+  firstRun: boolean;
+  shortcut: string[];
+  periodPhrase?: string;
+}) {
   if (status === "inbox" && firstRun) {
     return (
       <div className="mt-2 rounded-xl border border-dashed border-line-strong p-4 text-[12.5px] leading-relaxed text-ink-2">
@@ -182,6 +196,15 @@ function EmptyHint({ status, firstRun, shortcut }: { status: string; firstRun: b
         <span className="kbd">Ctrl V</span>. Luego dile a Claude Code <span className="kbd">/pendientes</span>.
       </div>
     );
+  }
+  if (periodPhrase && !firstRun) {
+    const filtered: Record<string, string> = {
+      inbox: `Nada capturado ni devuelto ${periodPhrase}.`,
+      in_progress: `Claude no tomó nada ${periodPhrase}.`,
+      review: `Nada llegó a revisión ${periodPhrase}.`,
+      done: `Nada aprobado ${periodPhrase}.`,
+    };
+    return <p className="px-2 py-6 text-center text-[12px] text-ink-3">{filtered[status]}</p>;
   }
   const text: Record<string, string> = {
     inbox: "Nada pendiente.",

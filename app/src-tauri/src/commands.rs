@@ -72,6 +72,8 @@ pub struct TaskCard {
     pub blocked: Option<String>,
     /// Veces que la devolvieron.
     pub returns: usize,
+    /// Desde cuándo está en su columna (UTC), para filtrar el tablero por día.
+    pub status_since: String,
 }
 
 #[derive(Serialize)]
@@ -201,6 +203,7 @@ fn card(d: TaskDetail) -> TaskCard {
         memories_created: d.memories.iter().filter(|m| m.relation == MemoryRelation::Created).count(),
         returns: d.events.iter().filter(|e| e.kind == "returned").count(),
         blocked,
+        status_since: d.status_since().to_owned(),
         task: d.task,
     }
 }

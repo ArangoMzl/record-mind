@@ -135,6 +135,107 @@ pub struct TaskDetail {
     pub memories: Vec<MemoryLink>,
 }
 
+impl TaskDetail {
+    /// Desde cuándo está en su columna actual, según el historial. `updated_at` no sirve para
+    /// esto: editarla, comentarla o marcarla para `/pendientes` también la toca. Volver a tomar
+    /// una tarea que ya estaba en curso no cuenta como cambio.
+    pub fn status_since(&self) -> &str {
+        let mut current: Option<Status> = None;
+        let mut since = self.task.created_at.as_str();
+        for e in &self.events {
+            let to = match e.kind.as_str() {
+                "created" | "returned" | "released" => Some(Status::Inbox),
+                "claimed" => Some(Status::InProgress),
+                "completed" => Some(Status::Review),
+                "approved" => Some(Status::Done),
+                // El mensaje es «origen → destino».
+                "moved" => e.message.rsplit('→').next().and_then(|s| s.parse().ok()),
+                _ => None,
+            };
+            if let Some(to) = to.filter(|&to| current != Some(to)) {
+                current = Some(to);
+                since = &e.created_at;
+            }
+        }
+        // Historial incompleto (datos antiguos o tocados a mano): lo mejor que hay es el último cambio.
+        if current != Some(self.task.status) {
+            return &self.task.updated_at;
+        }
+        since
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(kind: &str, message: &str, at: &str) -> TaskEvent {
+        TaskEvent { id: 0, task_id: 1, kind: kind.into(), actor: "user".into(), message: message.into(), created_at: at.into() }
+    }
+
+    fn detail(status: Status, events: Vec<TaskEvent>) -> TaskDetail {
+        TaskDetail {
+            task: Task {
+                id: 1,
+                project: "demo".into(),
+                title: "t".into(),
+                note: String::new(),
+                status,
+                priority: 0,
+                session_id: None,
+                resolution: None,
+                files_changed: Vec::new(),
+                attachments: Vec::new(),
+                created_at: "2026-11-10T08:00:00.000Z".into(),
+                updated_at: "2026-11-19T09:00:00.000Z".into(),
+                queued: false,
+            },
+            events,
+            memories: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn status_since_ignora_ediciones_y_comentarios() {
+        let d = detail(
+            Status::Done,
+            vec![
+                event("created", "", "2026-11-10T08:00:00.000Z"),
+                event("claimed", "", "2026-11-11T08:00:00.000Z"),
+                event("comment", "voy", "2026-11-11T08:05:00.000Z"),
+                event("claimed", "", "2026-11-11T09:00:00.000Z"),
+                event("completed", "listo", "2026-11-12T08:00:00.000Z"),
+                event("approved", "", "2026-11-13T08:00:00.000Z"),
+                // Editada días después de aprobarla: sigue siendo de ese día.
+                event("edited", "título", "2026-11-19T09:00:00.000Z"),
+            ],
+        );
+        assert_eq!(d.status_since(), "2026-11-13T08:00:00.000Z");
+
+        let mut d = d;
+        d.task.status = Status::InProgress;
+        d.events.truncate(4);
+        // Volver a tomarla no reinicia el reloj.
+        assert_eq!(d.status_since(), "2026-11-11T08:00:00.000Z");
+    }
+
+    #[test]
+    fn status_since_con_movimientos_a_mano() {
+        let d = detail(
+            Status::Review,
+            vec![
+                event("created", "", "2026-11-10T08:00:00.000Z"),
+                event("moved", "inbox → review", "2026-11-14T08:00:00.000Z"),
+                event("moved", "review → done", "2026-11-15T08:00:00.000Z"),
+                event("moved", "done → review", "2026-11-16T08:00:00.000Z"),
+            ],
+        );
+        assert_eq!(d.status_since(), "2026-11-16T08:00:00.000Z");
+        // Sin historial que cuadre, el último cambio.
+        assert_eq!(detail(Status::Done, vec![]).status_since(), "2026-11-19T09:00:00.000Z");
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct NewTask {
     pub project: String,

@@ -43,6 +43,35 @@ export interface TaskCard extends Task {
   memories_created: number;
   blocked: string | null;
   returns: number;
+  /** Desde cuándo está en su columna (UTC). Editarla o comentarla no la cambia. */
+  status_since: string;
+}
+
+export type Period = "all" | "today" | "yesterday" | "week";
+
+export const PERIODS: { id: Period; label: string; hint: string; phrase: string }[] = [
+  { id: "all", label: "Todo", hint: "Todas las tareas", phrase: "" },
+  { id: "today", label: "Hoy", hint: "Lo que llegó a cada columna hoy", phrase: "hoy" },
+  { id: "yesterday", label: "Ayer", hint: "Lo que llegó a cada columna ayer", phrase: "ayer" },
+  { id: "week", label: "7 días", hint: "Lo que llegó a cada columna en los últimos 7 días (hoy incluido)", phrase: "en 7 días" },
+];
+
+/**
+ * ¿Llegó la tarea a su columna dentro del periodo? Los días son de tu hora local, no UTC:
+ * algo aprobado a las 8 de la noche cuenta para hoy.
+ */
+export function inPeriod(t: TaskCard, period: Period, now = new Date()): boolean {
+  if (period === "all") return true;
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  // Con el constructor de Date (y no sumando 24 h) los cambios de horario no descuadran el día.
+  const [from, to] =
+    period === "today" ? [new Date(y, m, d), new Date(y, m, d + 1)]
+    : period === "yesterday" ? [new Date(y, m, d - 1), new Date(y, m, d)]
+    : [new Date(y, m, d - 6), new Date(y, m, d + 1)];
+  const at = parseDate(t.status_since).getTime();
+  return at >= from.getTime() && at < to.getTime();
 }
 
 export interface SessionInfo {
