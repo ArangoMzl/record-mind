@@ -1,6 +1,7 @@
 import { Brain, LayoutGrid, Lightbulb, Plug, Settings, Sparkles } from "lucide-react";
 import { shortcutLabel, timeAgo, type Board, type UpdateInfo } from "../lib/api";
 import iconUrl from "../../src-tauri/icons/128x128.png";
+import { BranchTag } from "./BranchTag";
 
 export function Sidebar({
   board,
@@ -23,11 +24,22 @@ export function Sidebar({
   const pendingRules = board?.rules.length ?? 0;
   const total = board?.tasks.filter((t) => t.status !== "done").length ?? 0;
   // Un renglón por proyecto: su conversación más reciente y cuántas tiene activas.
-  const live: { project: string; directory: string; last_activity: string; count: number }[] = [];
+  // La rama es la de la conversación más reciente; las demás (otros worktrees) van en el título.
+  const live: { project: string; directory: string; last_activity: string; count: number; branch: string | null; branches: Set<string> }[] = [];
   for (const s of board?.sessions ?? []) {
     const row = live.find((x) => x.project === s.project);
-    if (row) row.count += 1;
-    else live.push({ project: s.project, directory: s.directory, last_activity: s.last_activity, count: 1 });
+    if (row) {
+      row.count += 1;
+      if (s.branch) row.branches.add(s.branch);
+    } else
+      live.push({
+        project: s.project,
+        directory: s.directory,
+        last_activity: s.last_activity,
+        count: 1,
+        branch: s.branch,
+        branches: new Set(s.branch ? [s.branch] : []),
+      });
   }
 
   return (
@@ -50,14 +62,22 @@ export function Sidebar({
               <button
                 key={s.project}
                 onClick={() => onProject(s.project)}
-                title={`${s.directory}${s.count > 1 ? ` · ${s.count} conversaciones` : ""}`}
-                className={`flex items-baseline gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-white/[0.06] ${
+                title={`${s.directory}${s.branches.size ? ` · ${[...s.branches].join(", ")}` : ""}${s.count > 1 ? ` · ${s.count} conversaciones` : ""}`}
+                className={`flex flex-col rounded-lg px-1.5 py-1 text-left transition hover:bg-white/[0.06] ${
                   project === s.project ? "bg-white/[0.06]" : ""
                 }`}
               >
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.project}</span>
-                {s.count > 1 && <span className="font-mono text-[10.5px] text-ink-3">×{s.count}</span>}
-                <span className="shrink-0 text-[10.5px] text-ink-3">{timeAgo(s.last_activity)}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.project}</span>
+                  {s.count > 1 && <span className="font-mono text-[10.5px] text-ink-3">×{s.count}</span>}
+                  <span className="shrink-0 text-[10.5px] text-ink-3">{timeAgo(s.last_activity)}</span>
+                </span>
+                {s.branch && (
+                  <BranchTag
+                    branch={s.branch + (s.branches.size > 1 ? ` +${s.branches.size - 1}` : "")}
+                    className="max-w-full"
+                  />
+                )}
               </button>
             ))}
           </div>
@@ -96,7 +116,7 @@ export function Sidebar({
               onClick={() => onProject(p.name)}
               count={open}
               muted={empty}
-              title={p.directory ?? undefined}
+              title={p.directory ? `${p.directory}${p.branch ? ` · ${p.branch}` : ""}` : undefined}
             >
               <span
                 className={`size-1.5 shrink-0 rounded-full ${empty ? "border border-ink-3" : ""}`}
@@ -106,7 +126,9 @@ export function Sidebar({
                     : { background: p.counts[1] ? "var(--color-st-progress)" : p.counts[2] ? "var(--color-st-review)" : "var(--color-ink-3)" }
                 }
               />
-              <span className="truncate">{p.name}</span>
+              <span className="min-w-0 shrink truncate">{p.name}</span>
+              {/* La rama cede espacio antes que el nombre. */}
+              {p.branch && <BranchTag branch={p.branch} className="max-w-[50%] shrink-[6] opacity-80" />}
             </NavItem>
           );
         })}

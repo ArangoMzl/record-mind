@@ -3,6 +3,7 @@
 pub mod claude_code;
 pub mod claude_setup;
 pub mod engram;
+pub mod git;
 pub mod model;
 pub mod paths;
 pub mod rules;

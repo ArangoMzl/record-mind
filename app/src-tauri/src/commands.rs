@@ -177,6 +177,13 @@ pub fn live_sessions(state: State<AppState>) -> Vec<SessionInfo> {
     claude_code::live_sessions(&mut state.engram())
 }
 
+/// Rama actual de cada carpeta, en el mismo orden. Cambiar de rama no toca la base de tareas,
+/// así que el tablero la vuelve a pedir junto con las sesiones.
+#[tauri::command]
+pub fn git_branches(directories: Vec<String>) -> Vec<Option<String>> {
+    directories.iter().map(rm_core::git::current_branch).collect()
+}
+
 fn card(d: TaskDetail) -> TaskCard {
     // Una pregunta del agente (último evento, con «?») bloquea la tarjeta hasta que respondas;
     // los demás comentarios son avances y se muestran bajo «Claude está en esto».

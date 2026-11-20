@@ -52,12 +52,22 @@ export interface SessionInfo {
   started_at: string;
   /** Última actividad de la conversación (UTC). */
   last_activity: string;
+  /** Rama de git de su carpeta (un worktree puede estar en otra que el proyecto). */
+  branch: string | null;
+}
+
+export interface ProjectSummary {
+  name: string;
+  counts: [number, number, number, number];
+  directory: string | null;
+  /** Rama de git actual (commit abreviado si el HEAD está separado); null si no es un repo. */
+  branch: string | null;
 }
 
 export interface Board {
   tasks: TaskCard[];
   /** Con tareas primero; después los proyectos de Claude Code sin tareas (contadores a cero). */
-  projects: { name: string; counts: [number, number, number, number]; directory: string | null }[];
+  projects: ProjectSummary[];
   /** Reglas para CLAUDE.md que Claude sugirió y esperan tu decisión. */
   rules: RuleSuggestion[];
   /** Conversaciones de Claude Code con actividad reciente, la más reciente primero. */
@@ -190,6 +200,8 @@ export const api = {
   board: () => invoke<Board>("board"),
   /** Conversaciones de Claude Code con actividad reciente (consulta ligera). */
   sessions: () => invoke<SessionInfo[]>("live_sessions"),
+  /** Rama actual de cada carpeta, en el mismo orden. */
+  gitBranches: (directories: string[]) => invoke<(string | null)[]>("git_branches", { directories }),
   detail: (id: number) => invoke<TaskDetail>("task_detail", { id }),
   captureContext: () => invoke<CaptureContext>("capture_context"),
   create: (input: { project: string; note: string; title?: string; priority: number; images: ImageInput[] }) =>

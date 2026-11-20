@@ -30,6 +30,8 @@ pub struct ProjectSummary {
     pub counts: [i64; 4],
     /// Carpeta del proyecto, si Claude Code la conoce.
     pub directory: Option<String>,
+    /// Rama de git en la que está esa carpeta (commit abreviado si el HEAD está separado).
+    pub branch: Option<String>,
 }
 
 pub fn config_path() -> Option<PathBuf> {
@@ -117,6 +119,7 @@ pub fn live_sessions(engram: &mut EngramReader) -> Vec<SessionInfo> {
         .filter(|t| !is_internal(&t.cwd, &home))
         .map(|t| SessionInfo {
             project: engram.resolve_project(&t.cwd),
+            branch: crate::git::current_branch(&t.cwd),
             id: t.id,
             directory: t.cwd,
             started_at: utc_string(t.created),
@@ -199,7 +202,8 @@ pub fn merge_projects(with_tasks: Vec<(String, [i64; 4])>, known: &[KnownProject
         .into_iter()
         .map(|(name, counts)| {
             let directory = known.iter().find(|k| k.name == name).map(|k| k.directory.clone());
-            ProjectSummary { name, counts, directory }
+            let branch = directory.as_deref().and_then(crate::git::current_branch);
+            ProjectSummary { name, counts, directory, branch }
         })
         .collect();
     let mut rest: Vec<&KnownProject> = known.iter().filter(|k| !out.iter().any(|p| p.name == k.name)).collect();
@@ -208,6 +212,7 @@ pub fn merge_projects(with_tasks: Vec<(String, [i64; 4])>, known: &[KnownProject
         name: k.name.clone(),
         counts: [0; 4],
         directory: Some(k.directory.clone()),
+        branch: crate::git::current_branch(&k.directory),
     }));
     out
 }

@@ -184,6 +184,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::board,
             commands::live_sessions,
+            commands::git_branches,
             commands::decide_rule,
             commands::start_dictation,
             commands::get_shortcuts,

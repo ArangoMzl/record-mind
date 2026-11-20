@@ -23,6 +23,7 @@ import {
   type UpdateInfo,
 } from "../lib/api";
 import { UpdateDialog } from "./UpdateDialog";
+import { BranchTag } from "./BranchTag";
 import { Column } from "./Column";
 import { CardView } from "./TaskCardView";
 import { DetailDrawer } from "./DetailDrawer";
@@ -36,6 +37,9 @@ import { WindowControls } from "./WindowControls";
 
 export function BoardApp() {
   const [board, setBoard] = useState<Board | null>(null);
+  // Para el intervalo, que no debe reiniciarse con cada cambio del tablero.
+  const boardRef = useRef<Board | null>(null);
+  boardRef.current = board;
   const [error, setError] = useState<string | null>(null);
   const [project, setProject] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -100,9 +104,21 @@ export function BoardApp() {
     // Las fechas relativas («hace 3 min») se refrescan solas.
     // Cada 30 s: sesiones activas al día (abrir o cerrar una conversación no avisa) y, de paso,
     // se vuelven a pintar los «hace X min».
+    // Las ramas también: cambiar de rama en un proyecto no escribe en la base de tareas.
     const tick = setInterval(async () => {
       const sessions = await api.sessions().catch(() => null);
-      setBoard((b) => (b ? { ...b, sessions: sessions ?? b.sessions } : b));
+      const dirs = boardRef.current?.projects.flatMap((p) => (p.directory ? [p.directory] : [])) ?? [];
+      const branches = dirs.length ? await api.gitBranches(dirs).catch(() => null) : null;
+      const byDir = new Map(branches ? dirs.map((d, i) => [d, branches[i]]) : []);
+      setBoard((b) =>
+        b
+          ? {
+              ...b,
+              sessions: sessions ?? b.sessions,
+              projects: b.projects.map((p) => (p.directory && byDir.has(p.directory) ? { ...p, branch: byDir.get(p.directory) ?? null } : p)),
+            }
+          : b,
+      );
     }, 30_000);
     return () => {
       un.then((f) => f());
@@ -292,6 +308,7 @@ export function BoardApp() {
   const menuTask = menu ? board?.tasks.find((t) => t.id === menu.task.id) : undefined;
   const shortcut = shortcutLabel(board?.shortcut ?? "CommandOrControl+Shift+Space");
   const reviewCount = byStatus.review.length;
+  const projectBranch = project ? board?.projects.find((p) => p.name === project)?.branch : null;
 
   return (
     <div className="relative z-10 grid h-full grid-cols-[248px_minmax(0,1fr)]">
@@ -309,7 +326,12 @@ export function BoardApp() {
         {/* La ventana no tiene marco: esta cabecera hace de barra de título (se arrastra y con doble clic maximiza). */}
         <header data-tauri-drag-region className="flex items-center gap-3 border-b border-line px-6 py-3.5">
           <div data-tauri-drag-region className="max-w-[40%] min-w-0 shrink-0">
-            <div data-tauri-drag-region className="eyebrow truncate">{project ? "Proyecto" : "Todos los proyectos"}</div>
+            <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
+              <span data-tauri-drag-region className="eyebrow shrink-0">
+                {project ? "Proyecto" : "Todos los proyectos"}
+              </span>
+              {projectBranch && <BranchTag branch={projectBranch} size="md" className="text-ink-2" />}
+            </div>
             <h1 data-tauri-drag-region className="truncate text-[19px] font-semibold tracking-tight">
               {project ?? "Tablero"}
               {reviewCount > 0 && (

@@ -14,6 +14,9 @@ pub struct SessionInfo {
     pub started_at: String,
     /// Última señal de vida, en UTC (`AAAA-MM-DD HH:MM:SS`).
     pub last_activity: String,
+    /// Rama de git de `directory` ahora mismo (puede ser un worktree con otra rama).
+    #[serde(default)]
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,10 +94,12 @@ impl EngramReader {
              ORDER BY last_seen DESC LIMIT 1",
             [],
             |r| {
+                let directory: String = r.get(2)?;
                 Ok(SessionInfo {
                     id: r.get(0)?,
                     project: r.get(1)?,
-                    directory: r.get(2)?,
+                    branch: crate::git::current_branch(&directory),
+                    directory,
                     started_at: r.get(3)?,
                     last_activity: r.get(4)?,
                 })
