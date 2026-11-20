@@ -91,8 +91,21 @@ cd app && npx tauri icon design/icon.png -o src-tauri/icons
    gh release create vX.Y.Z \
      target/release/bundle/nsis/record-mind_X.Y.Z_x64-setup.exe \
      target/release/record-mind.exe \
-     --title "record-mind vX.Y.Z" --notes-file notas.md
+     --title "record-mind vX.Y.Z — Novedad principal" --notes-file notas.md
    ```
+
+Lo que publica la release se usa en otros sitios, así que conviene respetar el formato:
+
+- **Título** `record-mind vX.Y.Z — Novedad principal`: lo que va tras la raya (— o –) es el texto
+  del pill de la web. Que sea corto; en móvil se corta con «…». Sin raya, la web pone un texto
+  genérico.
+- **Asset `*_x64-setup.exe`**: la web enlaza ese instalador y la app lo descarga para
+  actualizarse. GitHub calcula su SHA-256 (`digest`).
+- **Bloque `## SHA-256`** en las notas, con líneas `<hash>  <archivo>`: respaldo de la app si
+  falta el `digest`. La app lo oculta al mostrar las notas.
+
+La web y el aviso de la app leen la release en vivo, así que no hay que tocar ni redesplegar la
+web.
 
 El instalador no está firmado, así que SmartScreen puede avisar al abrirlo: *Más información →
 Ejecutar de todas formas*.
